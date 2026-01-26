@@ -12,34 +12,64 @@ import {
   Edit,
   Trash2,
   MoreVertical,
+  CalendarCheck,
+  ClipboardList,
+  AlertCircle,
+  ChevronRight,
+  Clock,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { getStaffCourses, deleteCourse } from "@/lib/courses";
+import { getStaffAvailabilitySlots, getPendingReviewSlots } from "@/lib/booking";
 import { getImageUrl } from "@/lib/config";
 import type { CourseListItem } from "@/types/course";
+import type { AvailabilitySlot } from "@/types/booking";
 
 export default function StaffDashboard() {
   const { user } = useAuth();
   const [courses, setCourses] = useState<CourseListItem[]>([]);
+  const [slots, setSlots] = useState<AvailabilitySlot[]>([]);
+  const [pendingSlots, setPendingSlots] = useState<AvailabilitySlot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [totalCourses, setTotalCourses] = useState(0);
   const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    async function fetchCourses() {
+    async function fetchData() {
+      setIsLoading(true);
+      setError(null);
+
+      // Fetch courses first - this is critical
       try {
-        setIsLoading(true);
-        const response = await getStaffCourses(1, 5);
-        setCourses(response.courses);
-        setTotalCourses(response.total);
+        const coursesResponse = await getStaffCourses(1, 5);
+        setCourses(coursesResponse.courses);
+        setTotalCourses(coursesResponse.total);
       } catch (err) {
         console.error("Failed to fetch courses:", err);
-      } finally {
+        setError("Impossible de charger les formations");
         setIsLoading(false);
+        return;
       }
+
+      // Fetch availability data separately - non-blocking
+      try {
+        const [slotsResponse, pendingResponse] = await Promise.all([
+          getStaffAvailabilitySlots(1, 50),
+          getPendingReviewSlots(1, 50),
+        ]);
+        setSlots(slotsResponse.slots);
+        setPendingSlots(pendingResponse.slots);
+      } catch (err) {
+        // Availability fetch failed - log but don't block dashboard
+        console.error("Failed to fetch availability data:", err);
+        // Keep slots empty, dashboard still works
+      }
+
+      setIsLoading(false);
     }
 
-    fetchCourses();
+    fetchData();
   }, []);
 
   const handleDelete = async (courseId: number) => {
@@ -59,6 +89,13 @@ export default function StaffDashboard() {
     setActiveDropdown(null);
   };
 
+  // Calculate stats from availability data
+  const openSlotsCount = slots.filter(s => s.status === "open").length;
+  const totalReservedSeats = slots.reduce((sum, s) => sum + s.reserved_seats, 0);
+  const upcomingSlots = slots.filter(s => 
+    new Date(s.start_date) > new Date() && s.status !== "cancelled"
+  ).length;
+
   // Stats cards data
   const stats = [
     {
@@ -68,24 +105,58 @@ export default function StaffDashboard() {
       color: "from-purple-500 to-pink-500",
     },
     {
-      label: "Formations Actives",
-      value: courses.filter((c) => c.type === "public").length,
-      icon: Eye,
+      label: "Sessions Ouvertes",
+      value: openSlotsCount,
+      icon: CalendarCheck,
       color: "from-green-500 to-emerald-500",
     },
     {
-      label: "Ce Mois",
-      value: 0,
-      icon: Calendar,
-      color: "from-blue-500 to-cyan-500",
+      label: "À Confirmer",
+      value: pendingSlots.length,
+      icon: AlertCircle,
+      color: "from-yellow-500 to-orange-500",
+      highlight: pendingSlots.length > 0,
     },
     {
-      label: "Total Inscrits",
-      value: 0,
+      label: "Places Réservées",
+      value: totalReservedSeats,
       icon: Users,
-      color: "from-orange-500 to-amber-500",
+      color: "from-blue-500 to-cyan-500",
     },
   ];
+
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("fr-FR", {
+      day: "numeric",
+      month: "short",
+    });
+  };
+
+  const getCourseName = (courseId: number) => {
+    const course = courses.find(c => c.id === courseId);
+    return course?.title || `Formation #${courseId}`;
+  };
+
+  // Error state
+  if (error) {
+    return (
+      <div className="max-w-7xl mx-auto">
+        <div className="bg-red-50 dark:bg-red-500/10 border border-red-200 dark:border-red-500/30 rounded-2xl p-8 text-center">
+          <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
+          <h2 className="text-xl font-semibold text-red-700 dark:text-red-400 mb-2">
+            Erreur de chargement
+          </h2>
+          <p className="text-red-600 dark:text-red-300 mb-4">{error}</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="px-4 py-2 bg-red-500 text-white rounded-lg hover:bg-red-600 transition-colors"
+          >
+            Réessayer
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -113,7 +184,11 @@ export default function StaffDashboard() {
         {stats.map((stat, index) => (
           <div
             key={index}
-            className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 p-6"
+            className={`bg-white dark:bg-slate-800/50 rounded-2xl border p-6 ${
+              stat.highlight 
+                ? "border-yellow-300 dark:border-yellow-500/50 ring-2 ring-yellow-200 dark:ring-yellow-500/20" 
+                : "border-slate-200 dark:border-slate-700/50"
+            }`}
           >
             <div className="flex items-center justify-between mb-4">
               <div
@@ -121,7 +196,13 @@ export default function StaffDashboard() {
               >
                 <stat.icon className="w-6 h-6 text-white" />
               </div>
-              <TrendingUp className="w-5 h-5 text-green-500" />
+              {stat.highlight ? (
+                <span className="px-2 py-0.5 rounded-full text-xs font-bold bg-yellow-500 text-white animate-pulse">
+                  Action requise
+                </span>
+              ) : (
+                <TrendingUp className="w-5 h-5 text-green-500" />
+              )}
             </div>
             <p className="text-sm text-slate-500 dark:text-slate-400">{stat.label}</p>
             <p className="text-3xl font-bold text-slate-900 dark:text-white mt-1">
@@ -130,6 +211,46 @@ export default function StaffDashboard() {
           </div>
         ))}
       </div>
+
+      {/* Pending Sessions Alert */}
+      {pendingSlots.length > 0 && (
+        <div className="mb-8 bg-yellow-50 dark:bg-yellow-500/10 border border-yellow-200 dark:border-yellow-500/30 rounded-2xl p-6">
+          <div className="flex items-start gap-4">
+            <div className="w-10 h-10 rounded-xl bg-yellow-100 dark:bg-yellow-500/20 flex items-center justify-center shrink-0">
+              <AlertCircle className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
+            </div>
+            <div className="flex-1">
+              <h3 className="font-semibold text-yellow-800 dark:text-yellow-300 mb-1">
+                {pendingSlots.length} session{pendingSlots.length > 1 ? "s" : ""} en attente de votre décision
+              </h3>
+              <p className="text-sm text-yellow-700 dark:text-yellow-400 mb-4">
+                Le délai de réservation est passé. Confirmez ou annulez ces sessions.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {pendingSlots.slice(0, 3).map((slot) => (
+                  <Link
+                    key={slot.id}
+                    href={`/staff/courses/${slot.course_id}/availability/${slot.id}/bookings`}
+                    className="inline-flex items-center gap-2 px-3 py-1.5 bg-white dark:bg-slate-800 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-yellow-100 dark:hover:bg-yellow-500/20 transition-colors"
+                  >
+                    <Calendar className="w-3.5 h-3.5" />
+                    {formatDate(slot.start_date)} • {slot.reserved_seats} places
+                  </Link>
+                ))}
+                {pendingSlots.length > 3 && (
+                  <Link
+                    href="/staff/availability"
+                    className="inline-flex items-center gap-1 px-3 py-1.5 text-sm font-medium text-yellow-700 dark:text-yellow-400 hover:underline"
+                  >
+                    +{pendingSlots.length - 3} autres
+                    <ChevronRight className="w-4 h-4" />
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Recent Courses */}
       <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50">
@@ -186,7 +307,7 @@ export default function StaffDashboard() {
                     {course.title}
                   </h3>
                   <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                    {course.max_seats} places • {course.price.toLocaleString()} DZD
+                    {course.max_seats} places • {course.price.toLocaleString("fr-TN")} DT
                   </p>
                 </div>
 
@@ -220,6 +341,13 @@ export default function StaffDashboard() {
                       >
                         <Eye className="w-4 h-4" />
                         Voir
+                      </Link>
+                      <Link
+                        href={`/staff/courses/${course.id}/availability`}
+                        className="flex items-center gap-2 px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700/50"
+                      >
+                        <CalendarCheck className="w-4 h-4" />
+                        Gérer Sessions
                       </Link>
                       <Link
                         href={`/staff/courses/${course.id}/edit`}

@@ -14,6 +14,10 @@ export interface CourseProfessor {
   hourly_rate: number;
 }
 
+/**
+ * Course represents a training template/offering.
+ * Dates and scheduling are handled via availability slots.
+ */
 export interface Course {
   id: number;
   title: string;
@@ -24,9 +28,7 @@ export interface Course {
   max_seats: number;
   image_path?: string;
   duration_hours?: number;
-  schedule?: string;
-  start_date?: string;
-  end_date?: string;
+  sector?: string;
   is_published: boolean;
   created_at: string;
   updated_at: string;
@@ -43,8 +45,7 @@ export interface CourseListItem {
   max_seats: number;
   image_path?: string;
   duration_hours?: number;
-  schedule?: string;
-  start_date?: string;
+  sector?: string;
 }
 
 export interface CourseListResponse {
@@ -63,11 +64,16 @@ export interface CourseCreateData {
   price: number;
   max_seats: number;
   duration_hours?: number;
-  schedule?: string;
-  start_date?: string;
-  end_date?: string;
+  sector?: string;
   professor_id?: number;
   is_published?: boolean;
 }
 
 export interface CourseUpdateData extends Partial<CourseCreateData> {}
+
+export interface CourseEditability {
+  can_edit_price: boolean;
+  can_edit_seats: boolean;
+  has_bookings: boolean;
+  reason?: string;
+}

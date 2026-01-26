@@ -9,15 +9,21 @@ interface CourseCardProps {
   course: CourseListItem;
 }
 
+/**
+ * Format price in Tunisian Dinar (DT)
+ */
+function formatPriceDT(price: number): string {
+  return `${new Intl.NumberFormat("fr-TN", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(price)} DT`;
+}
+
 export function CourseCard({ course }: CourseCardProps) {
   const imageUrl = getImageUrl(course.image_path);
   
-  // Format price
-  const formattedPrice = new Intl.NumberFormat("fr-DZ", {
-    style: "currency",
-    currency: "DZD",
-    minimumFractionDigits: 0,
-  }).format(course.price);
+  // Format price in Tunisian Dinar (DT)
+  const formattedPrice = formatPriceDT(course.price);
 
   // Format date if available
   const formattedStartDate = course.start_date

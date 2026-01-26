@@ -1,5 +1,5 @@
 import { apiClient } from "./api";
-import type { Course, CourseListResponse, CourseCreateData, CourseUpdateData } from "@/types/course";
+import type { Course, CourseListResponse, CourseCreateData, CourseUpdateData, CourseEditability } from "@/types/course";
 
 // Public endpoints (no auth required)
 export async function getPublicCourses(
@@ -41,6 +41,14 @@ export async function getStaffCourses(
 
 export async function getStaffCourseDetails(courseId: number): Promise<Course> {
   return apiClient.get<Course>(`/courses/staff/course/${courseId}`, true);
+}
+
+/**
+ * Check if a course's price and seats can be edited
+ * Returns editability status and reason if not editable
+ */
+export async function getCourseEditability(courseId: number): Promise<CourseEditability> {
+  return apiClient.get<CourseEditability>(`/courses/staff/course/${courseId}/editability`, true);
 }
 
 export async function createCourse(

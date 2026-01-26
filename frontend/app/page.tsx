@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import {
   ArrowRight,
   Play,
@@ -23,6 +24,7 @@ import {
 } from "lucide-react";
 import { Header } from "@/components/Header";
 import { CoursesSection } from "@/components/CoursesSection";
+import { NewsletterForm } from "@/components/NewsletterForm";
 
 // ============ HERO SECTION ============
 function HeroSection() {
@@ -30,61 +32,101 @@ function HeroSection() {
     <section className="relative pt-32 pb-20 px-4 sm:px-6 lg:px-8 overflow-hidden">
       {/* Background gradient */}
       <div className="absolute inset-0 overflow-hidden">
-        <div className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20 blur-3xl rounded-full" />
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          transition={{ duration: 1 }}
+          className="absolute top-1/4 left-1/2 -translate-x-1/2 w-[800px] h-[600px] bg-gradient-to-r from-indigo-500/20 via-purple-500/20 to-pink-500/20 blur-3xl rounded-full"
+        />
       </div>
 
       <div className="max-w-7xl mx-auto relative">
         <div className="text-center max-w-4xl mx-auto">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 mb-8">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 mb-8"
+          >
             <GraduationCap className="w-4 h-4 text-purple-500" />
             <span className="text-sm text-slate-600 dark:text-slate-300">Formation Continue Universitaire</span>
-          </div>
+          </motion.div>
 
           {/* Headline */}
-          <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6 text-slate-900 dark:text-white">
+          <motion.h1
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+            className="text-4xl sm:text-5xl lg:text-6xl font-bold tracking-tight mb-6 text-slate-900 dark:text-white"
+          >
             Développez Vos Compétences avec{" "}
             <span className="gradient-text">Nos Formations Professionnelles</span>
-          </h1>
+          </motion.h1>
 
           {/* Subheadline */}
-          <p className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 mb-10 max-w-2xl mx-auto">
+          <motion.p
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+            className="text-lg sm:text-xl text-slate-600 dark:text-slate-400 mb-10 max-w-2xl mx-auto"
+          >
             Le Bureau de Formation Continue de l&apos;Université vous propose des formations 
             de qualité dispensées par des experts. Formations publiques et sur mesure pour entreprises.
-          </p>
+          </motion.p>
 
           {/* CTAs */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16">
-            <a
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.3 }}
+            className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-16"
+          >
+            <motion.a
               href="#courses"
-              className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
+              className="w-full sm:w-auto px-8 py-4 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 transition-opacity flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25"
             >
               Découvrir les Formations
               <ArrowRight className="w-5 h-5" />
-            </a>
-            <a
+            </motion.a>
+            <motion.a
               href="#contact"
+              whileHover={{ scale: 1.02 }}
+              whileTap={{ scale: 0.98 }}
               className="w-full sm:w-auto px-8 py-4 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-white font-semibold hover:bg-slate-100 dark:hover:bg-slate-800/50 transition-colors flex items-center justify-center gap-2"
             >
               <Building2 className="w-5 h-5" />
               Formation sur Mesure
-            </a>
-          </div>
+            </motion.a>
+          </motion.div>
 
           {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-3xl mx-auto">
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.4 }}
+            className="grid grid-cols-2 md:grid-cols-4 gap-8 max-w-3xl mx-auto"
+          >
             {[
               { value: "500+", label: "Formés" },
               { value: "50+", label: "Formations" },
               { value: "30+", label: "Experts" },
               { value: "98%", label: "Satisfaction" },
             ].map((stat, index) => (
-              <div key={index} className="text-center">
+              <motion.div
+                key={index}
+                initial={{ opacity: 0, scale: 0.5 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ duration: 0.3, delay: 0.5 + index * 0.1 }}
+                className="text-center"
+              >
                 <div className="text-3xl font-bold gradient-text">{stat.value}</div>
                 <div className="text-sm text-slate-500 dark:text-slate-400">{stat.label}</div>
-              </div>
+              </motion.div>
             ))}
-          </div>
+          </motion.div>
         </div>
       </div>
     </section>
@@ -505,37 +547,76 @@ function CTASection() {
   return (
     <section className="py-24 px-4 sm:px-6 lg:px-8">
       <div className="max-w-4xl mx-auto">
-        <div className="relative rounded-3xl overflow-hidden">
+        <motion.div
+          initial={{ opacity: 0, y: 30 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          transition={{ duration: 0.6 }}
+          className="relative rounded-3xl overflow-hidden"
+        >
           {/* Background gradient */}
           <div className="absolute inset-0 bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500" />
           <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4xIj48Y2lyY2xlIGN4PSIzMCIgY3k9IjMwIiByPSIyIi8+PC9nPjwvZz48L3N2Zz4=')] opacity-30" />
 
           {/* Content */}
           <div className="relative px-8 py-16 sm:px-16 text-center">
-            <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
-              Ready to accelerate your learning?
-            </h2>
-            <p className="text-white/80 mb-8 max-w-xl mx-auto">
-              Join over 50,000 learners who are already mastering new skills.
-              Start your free trial today.
-            </p>
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
-              <a
+            <motion.h2
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.2 }}
+              className="text-3xl sm:text-4xl font-bold text-white mb-4"
+            >
+              Prêt à développer vos compétences ?
+            </motion.h2>
+            <motion.p
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.3 }}
+              className="text-white/80 mb-8 max-w-xl mx-auto"
+            >
+              Rejoignez les professionnels qui développent leurs compétences avec nos formations.
+              Contactez-nous pour une formation sur mesure.
+            </motion.p>
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              transition={{ delay: 0.4 }}
+              className="flex flex-col sm:flex-row items-center justify-center gap-4"
+            >
+              <motion.a
                 href="/signup"
-                className="w-full sm:w-auto px-8 py-4 rounded-xl bg-white text-purple-600 font-semibold hover:bg-white/90 transition-colors flex items-center justify-center gap-2"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="w-full sm:w-auto px-8 py-4 rounded-xl bg-white text-purple-600 font-semibold hover:bg-white/90 transition-colors flex items-center justify-center gap-2 shadow-lg"
               >
-                Start Free Trial
+                Commencer Maintenant
                 <ArrowRight className="w-5 h-5" />
-              </a>
-              <a
+              </motion.a>
+              <motion.a
                 href="#pricing"
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
                 className="w-full sm:w-auto px-8 py-4 rounded-xl border-2 border-white/30 text-white font-semibold hover:bg-white/10 transition-colors"
               >
-                View Pricing
-              </a>
-            </div>
+                Voir les Tarifs
+              </motion.a>
+            </motion.div>
           </div>
-        </div>
+        </motion.div>
+      </div>
+    </section>
+  );
+}
+
+// ============ NEWSLETTER SECTION ============
+function NewsletterSection() {
+  return (
+    <section className="py-24 px-4 sm:px-6 lg:px-8 bg-slate-100/50 dark:bg-slate-900/30">
+      <div className="max-w-3xl mx-auto">
+        <NewsletterForm variant="section" />
       </div>
     </section>
   );
@@ -544,10 +625,10 @@ function CTASection() {
 // ============ FOOTER ============
 function Footer() {
   const footerLinks = {
-    Product: ["Features", "Pricing", "Courses", "Enterprise"],
-    Resources: ["Blog", "Documentation", "Webinars", "Case Studies"],
-    Company: ["About", "Careers", "Press", "Partners"],
-    Legal: ["Privacy", "Terms", "Security", "Cookies"],
+    Formations: ["Catalogue", "Sur Mesure", "Entreprises", "Certifications"],
+    Ressources: ["Blog", "FAQ", "Webinaires", "Témoignages"],
+    Contact: ["À propos", "Partenariats", "Recrutement", "Presse"],
+    Légal: ["Confidentialité", "CGU", "Cookies", "Mentions légales"],
   };
 
   return (
@@ -556,25 +637,43 @@ function Footer() {
         <div className="grid grid-cols-2 md:grid-cols-6 gap-8 mb-12">
           {/* Logo & description */}
           <div className="col-span-2">
-            <a href="/" className="flex items-center gap-2 mb-4">
+            <motion.a
+              href="/"
+              initial={{ opacity: 0 }}
+              whileInView={{ opacity: 1 }}
+              viewport={{ once: true }}
+              className="flex items-center gap-2 mb-4"
+            >
               <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">
-                <Zap className="w-5 h-5 text-white" />
+                <GraduationCap className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold text-slate-900 dark:text-white">TrainFast</span>
-            </a>
+              <span className="text-xl font-bold text-slate-900 dark:text-white">FormationPro</span>
+            </motion.a>
             <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
-              Empowering learners worldwide with AI-powered education.
+              Bureau de Formation Continue Universitaire - Des formations de qualité pour les professionnels.
             </p>
             <div className="flex items-center gap-4">
-              <a href="#" className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+              <motion.a
+                href="#"
+                whileHover={{ scale: 1.1 }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
+              >
                 <Twitter className="w-5 h-5" />
-              </a>
-              <a href="#" className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+              </motion.a>
+              <motion.a
+                href="#"
+                whileHover={{ scale: 1.1 }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
+              >
                 <Linkedin className="w-5 h-5" />
-              </a>
-              <a href="#" className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors">
+              </motion.a>
+              <motion.a
+                href="#"
+                whileHover={{ scale: 1.1 }}
+                className="text-slate-400 hover:text-slate-600 dark:hover:text-white transition-colors"
+              >
                 <Github className="w-5 h-5" />
-              </a>
+              </motion.a>
             </div>
           </div>
 
@@ -598,42 +697,36 @@ function Footer() {
           ))}
         </div>
 
-        {/* Newsletter */}
+        {/* Footer Newsletter - Simplified */}
         <div className="flex flex-col md:flex-row items-center justify-between gap-6 py-8 border-t border-slate-200 dark:border-slate-800/50">
           <div>
             <h4 className="text-slate-900 dark:text-white font-semibold mb-1">
-              Subscribe to our newsletter
+              Newsletter sectorielle
             </h4>
             <p className="text-slate-600 dark:text-slate-400 text-sm">
-              Get the latest courses and learning tips delivered to your inbox.
+              Recevez des offres de formation adaptées à votre secteur d&apos;activité.
             </p>
           </div>
-          <form className="flex gap-2 w-full md:w-auto">
-            <input
-              type="email"
-              placeholder="Enter your email"
-              className="flex-1 md:w-64 px-4 py-2 rounded-lg bg-slate-100 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-purple-500/50"
-            />
-            <button
-              type="submit"
-              className="px-6 py-2 rounded-lg bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-medium hover:opacity-90 transition-opacity"
-            >
-              Subscribe
-            </button>
-          </form>
+          <motion.a
+            href="#newsletter"
+            whileHover={{ scale: 1.05 }}
+            className="px-6 py-2 rounded-lg bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-medium hover:opacity-90 transition-opacity"
+          >
+            S&apos;inscrire
+          </motion.a>
         </div>
 
         {/* Copyright */}
         <div className="pt-8 border-t border-slate-200 dark:border-slate-800/50 flex flex-col md:flex-row items-center justify-between gap-4">
           <p className="text-slate-500 text-sm">
-            © 2026 TrainFast. All rights reserved.
+            © 2026 FormationPro - Bureau de Formation Continue. Tous droits réservés.
           </p>
           <div className="flex items-center gap-6">
             <a href="#" className="text-slate-500 hover:text-slate-900 dark:hover:text-white text-sm transition-colors">
-              Privacy Policy
+              Politique de Confidentialité
             </a>
             <a href="#" className="text-slate-500 hover:text-slate-900 dark:hover:text-white text-sm transition-colors">
-              Terms of Service
+              Conditions d&apos;Utilisation
             </a>
           </div>
         </div>
@@ -655,6 +748,7 @@ export default function HomePage() {
       <PricingSection />
       <FAQSection />
       <CTASection />
+      <NewsletterSection />
       <Footer />
     </main>
   );

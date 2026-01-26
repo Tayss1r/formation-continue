@@ -1,21 +1,21 @@
 "use client";
 
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import {
   Upload,
   X,
-  Calendar,
   Clock,
   Users,
   DollarSign,
   FileText,
   Tag,
   Loader2,
+  AlertTriangle,
 } from "lucide-react";
-import { createCourse, updateCourse } from "@/lib/courses";
+import { createCourse, updateCourse, getCourseEditability } from "@/lib/courses";
 import { getImageUrl } from "@/lib/config";
-import type { Course, CourseCreateData, CourseType } from "@/types/course";
+import type { Course, CourseCreateData, CourseType, CourseEditability } from "@/types/course";
 
 interface CourseFormProps {
   course?: Course;
@@ -34,9 +34,6 @@ export function CourseForm({ course, mode }: CourseFormProps) {
     price: course?.price || 0,
     max_seats: course?.max_seats || 20,
     duration_hours: course?.duration_hours || undefined,
-    schedule: course?.schedule || "",
-    start_date: course?.start_date?.split("T")[0] || "",
-    end_date: course?.end_date?.split("T")[0] || "",
     is_published: course?.is_published ?? true,
   });
 
@@ -46,6 +43,26 @@ export function CourseForm({ course, mode }: CourseFormProps) {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [editability, setEditability] = useState<CourseEditability | null>(null);
+  const [editabilityLoading, setEditabilityLoading] = useState(false);
+
+  // Fetch editability status when editing a course
+  useEffect(() => {
+    async function fetchEditability() {
+      if (mode === "edit" && course) {
+        try {
+          setEditabilityLoading(true);
+          const data = await getCourseEditability(course.id);
+          setEditability(data);
+        } catch (err) {
+          console.error("Failed to fetch editability:", err);
+        } finally {
+          setEditabilityLoading(false);
+        }
+      }
+    }
+    fetchEditability();
+  }, [mode, course]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -137,16 +154,10 @@ export function CourseForm({ course, mode }: CourseFormProps) {
     setIsSubmitting(true);
 
     try {
-      const dataToSubmit: CourseCreateData = {
-        ...formData,
-        start_date: formData.start_date || undefined,
-        end_date: formData.end_date || undefined,
-      };
-
       if (mode === "create") {
-        await createCourse(dataToSubmit, imageFile || undefined);
+        await createCourse(formData, imageFile || undefined);
       } else if (course) {
-        await updateCourse(course.id, dataToSubmit, imageFile || undefined);
+        await updateCourse(course.id, formData, imageFile || undefined);
       }
 
       router.push("/staff/courses");
@@ -342,6 +353,23 @@ export function CourseForm({ course, mode }: CourseFormProps) {
           Prix et Capacité
         </h2>
 
+        {/* Show warning if editing is restricted */}
+        {mode === "edit" && editability && editability.has_bookings && (
+          <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl">
+            <div className="flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
+                  Modification restreinte
+                </p>
+                <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
+                  {editability.reason || "Impossible de modifier le prix et les places après des réservations."}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {/* Price */}
           <div>
@@ -349,7 +377,7 @@ export function CourseForm({ course, mode }: CourseFormProps) {
               htmlFor="price"
               className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
             >
-              Prix (DZD) *
+              Prix (DT) *
             </label>
             <div className="relative">
               <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
@@ -361,11 +389,16 @@ export function CourseForm({ course, mode }: CourseFormProps) {
                 onChange={handleInputChange}
                 min="0"
                 step="100"
+                disabled={mode === "edit" && editability?.has_bookings}
                 className={`w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
                   errors.price
                     ? "border-red-500"
                     : "border-slate-200 dark:border-slate-700"
-                } text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors`}
+                } text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors ${
+                  mode === "edit" && editability?.has_bookings
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                }`}
                 placeholder="25000"
               />
             </div>
@@ -391,11 +424,16 @@ export function CourseForm({ course, mode }: CourseFormProps) {
                 value={formData.max_seats}
                 onChange={handleInputChange}
                 min="1"
+                disabled={mode === "edit" && editability?.has_bookings}
                 className={`w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
                   errors.max_seats
                     ? "border-red-500"
                     : "border-slate-200 dark:border-slate-700"
-                } text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors`}
+                } text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors ${
+                  mode === "edit" && editability?.has_bookings
+                    ? "opacity-50 cursor-not-allowed"
+                    : ""
+                }`}
                 placeholder="20"
               />
             </div>
@@ -406,96 +444,35 @@ export function CourseForm({ course, mode }: CourseFormProps) {
         </div>
       </div>
 
-      {/* Schedule */}
+      {/* Duration */}
       <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 p-6">
         <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-          Planification
+          Durée de la Formation
         </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Duration */}
-          <div>
-            <label
-              htmlFor="duration_hours"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
-            >
-              Durée (heures)
-            </label>
-            <div className="relative">
-              <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
-                type="number"
-                id="duration_hours"
-                name="duration_hours"
-                value={formData.duration_hours || ""}
-                onChange={handleInputChange}
-                min="1"
-                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors"
-                placeholder="24"
-              />
-            </div>
-          </div>
-
-          {/* Schedule Text */}
-          <div>
-            <label
-              htmlFor="schedule"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
-            >
-              Horaires
-            </label>
+        <div className="max-w-md">
+          <label
+            htmlFor="duration_hours"
+            className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+          >
+            Durée totale (heures)
+          </label>
+          <div className="relative">
+            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
             <input
-              type="text"
-              id="schedule"
-              name="schedule"
-              value={formData.schedule || ""}
+              type="number"
+              id="duration_hours"
+              name="duration_hours"
+              value={formData.duration_hours || ""}
               onChange={handleInputChange}
-              className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors"
-              placeholder="Ex: Sam-Dim, 9h-17h"
+              min="1"
+              className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors"
+              placeholder="24"
             />
           </div>
-
-          {/* Start Date */}
-          <div>
-            <label
-              htmlFor="start_date"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
-            >
-              Date de Début
-            </label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
-                type="date"
-                id="start_date"
-                name="start_date"
-                value={formData.start_date || ""}
-                onChange={handleInputChange}
-                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors"
-              />
-            </div>
-          </div>
-
-          {/* End Date */}
-          <div>
-            <label
-              htmlFor="end_date"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
-            >
-              Date de Fin
-            </label>
-            <div className="relative">
-              <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
-                type="date"
-                id="end_date"
-                name="end_date"
-                value={formData.end_date || ""}
-                onChange={handleInputChange}
-                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors"
-              />
-            </div>
-          </div>
+          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+            Les dates et horaires seront définis lors de la création des sessions de disponibilité.
+          </p>
         </div>
       </div>
 

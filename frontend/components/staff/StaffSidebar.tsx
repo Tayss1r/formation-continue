@@ -13,6 +13,8 @@ import {
   X,
   GraduationCap,
   ChevronLeft,
+  CalendarCheck,
+  ClipboardList,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { ThemeToggle } from "@/components/ThemeToggle";
@@ -27,6 +29,16 @@ const navItems = [
     label: "Mes Formations",
     href: "/staff/courses",
     icon: BookOpen,
+  },
+  {
+    label: "Sessions & Planning",
+    href: "/staff/availability",
+    icon: CalendarCheck,
+  },
+  {
+    label: "Réservations",
+    href: "/staff/bookings",
+    icon: ClipboardList,
   },
   {
     label: "Nouvelle Formation",

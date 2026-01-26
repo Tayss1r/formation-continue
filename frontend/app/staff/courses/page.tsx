@@ -12,13 +12,28 @@ import {
   MoreVertical,
   ChevronLeft,
   ChevronRight,
+  Calendar,
+  CalendarCheck,
+  Users,
+  AlertCircle,
+  Clock,
 } from "lucide-react";
 import { getStaffCourses, deleteCourse } from "@/lib/courses";
+import { getStaffAvailabilitySlots } from "@/lib/booking";
 import { getImageUrl } from "@/lib/config";
 import type { CourseListItem } from "@/types/course";
+import type { AvailabilitySlot } from "@/types/booking";
+
+interface CourseWithAvailability extends CourseListItem {
+  slots: AvailabilitySlot[];
+  openSlots: number;
+  pendingSlots: number;
+  totalReserved: number;
+}
 
 export default function StaffCoursesPage() {
-  const [courses, setCourses] = useState<CourseListItem[]>([]);
+  const [courses, setCourses] = useState<CourseWithAvailability[]>([]);
+  const [allSlots, setAllSlots] = useState<AvailabilitySlot[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -29,21 +44,49 @@ export default function StaffCoursesPage() {
   const perPage = 10;
 
   useEffect(() => {
-    async function fetchCourses() {
+    async function fetchData() {
+      setIsLoading(true);
+      
+      // Fetch courses first - critical
+      let coursesData: { courses: CourseListItem[]; total_pages: number; total: number } | null = null;
       try {
-        setIsLoading(true);
-        const response = await getStaffCourses(page, perPage);
-        setCourses(response.courses);
-        setTotalPages(response.total_pages);
-        setTotal(response.total);
+        coursesData = await getStaffCourses(page, perPage);
+        setTotalPages(coursesData.total_pages);
+        setTotal(coursesData.total);
       } catch (err) {
         console.error("Failed to fetch courses:", err);
-      } finally {
         setIsLoading(false);
+        return;
       }
+
+      // Fetch slots separately - non-blocking
+      let slotsData: AvailabilitySlot[] = [];
+      try {
+        const slotsResponse = await getStaffAvailabilitySlots(1, 50);
+        slotsData = slotsResponse.slots;
+        setAllSlots(slotsData);
+      } catch (err) {
+        console.error("Failed to fetch availability slots:", err);
+        // Continue without slots
+      }
+      
+      // Enhance courses with availability info
+      const enhancedCourses: CourseWithAvailability[] = coursesData.courses.map(course => {
+        const courseSlots = slotsData.filter(s => s.course_id === course.id);
+        return {
+          ...course,
+          slots: courseSlots,
+          openSlots: courseSlots.filter(s => s.status === "open").length,
+          pendingSlots: courseSlots.filter(s => s.status === "pending_review").length,
+          totalReserved: courseSlots.reduce((sum, s) => sum + s.reserved_seats, 0),
+        };
+      });
+      
+      setCourses(enhancedCourses);
+      setIsLoading(false);
     }
 
-    fetchCourses();
+    fetchData();
   }, [page]);
 
   const handleDelete = async (courseId: number) => {
@@ -71,12 +114,11 @@ export default function StaffCoursesPage() {
     : courses;
 
   const formatPrice = (price: number) => {
-    return new Intl.NumberFormat("fr-DZ", {
-      style: "currency",
-      currency: "DZD",
-      minimumFractionDigits: 0,
-    }).format(price);
+    return `${price.toLocaleString("fr-TN")} DT`;
   };
+
+  // Info banner about new scheduling
+  const showInfoBanner = courses.length > 0;
 
   return (
     <div className="max-w-7xl mx-auto">
@@ -112,6 +154,21 @@ export default function StaffCoursesPage() {
           />
         </div>
       </div>
+
+      {/* Info Banner - New Scheduling System */}
+      {showInfoBanner && (
+        <div className="mb-6 bg-blue-50 dark:bg-blue-500/10 border border-blue-200 dark:border-blue-500/30 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <CalendarCheck className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm text-blue-800 dark:text-blue-300">
+                <strong>Nouveau :</strong> Les formations n&apos;ont plus de dates fixes. 
+                Utilisez le bouton <span className="inline-flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Sessions</span> pour créer des créneaux de disponibilité que les entreprises pourront réserver.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Courses Table */}
       <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 overflow-hidden">
@@ -152,7 +209,7 @@ export default function StaffCoursesPage() {
                       Prix
                     </th>
                     <th className="text-left px-6 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">
-                      Places
+                      Sessions
                     </th>
                     <th className="text-right px-6 py-4 text-sm font-medium text-slate-500 dark:text-slate-400">
                       Actions
@@ -201,8 +258,44 @@ export default function StaffCoursesPage() {
                       <td className="px-6 py-4 text-slate-900 dark:text-white">
                         {formatPrice(course.price)}
                       </td>
-                      <td className="px-6 py-4 text-slate-900 dark:text-white">
-                        {course.max_seats}
+                      <td className="px-6 py-4">
+                        <Link 
+                          href={`/staff/courses/${course.id}/availability`}
+                          className="group"
+                        >
+                          {course.slots.length === 0 ? (
+                            <span className="text-sm text-slate-400 group-hover:text-purple-500 transition-colors">
+                              Aucune session
+                            </span>
+                          ) : (
+                            <div className="space-y-1">
+                              <div className="flex items-center gap-2">
+                                <span className="text-sm font-medium text-slate-900 dark:text-white group-hover:text-purple-500 transition-colors">
+                                  {course.slots.length} session{course.slots.length > 1 ? "s" : ""}
+                                </span>
+                                {course.pendingSlots > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-yellow-500 text-white">
+                                    {course.pendingSlots}
+                                  </span>
+                                )}
+                              </div>
+                              <div className="flex items-center gap-3 text-xs text-slate-500">
+                                {course.openSlots > 0 && (
+                                  <span className="flex items-center gap-1 text-green-600 dark:text-green-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-green-500"></span>
+                                    {course.openSlots} ouverte{course.openSlots > 1 ? "s" : ""}
+                                  </span>
+                                )}
+                                {course.totalReserved > 0 && (
+                                  <span className="flex items-center gap-1">
+                                    <Users className="w-3 h-3" />
+                                    {course.totalReserved} réservé{course.totalReserved > 1 ? "s" : ""}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          )}
+                        </Link>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center justify-end gap-2">
@@ -212,6 +305,17 @@ export default function StaffCoursesPage() {
                             title="Voir"
                           >
                             <Eye className="w-5 h-5" />
+                          </Link>
+                          <Link
+                            href={`/staff/courses/${course.id}/availability`}
+                            className={`p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors ${
+                              course.pendingSlots > 0 
+                                ? "text-yellow-500 hover:text-yellow-600" 
+                                : "text-slate-400 hover:text-purple-500"
+                            }`}
+                            title={course.pendingSlots > 0 ? `${course.pendingSlots} session(s) à confirmer` : "Gérer les sessions"}
+                          >
+                            <Calendar className="w-5 h-5" />
                           </Link>
                           <Link
                             href={`/staff/courses/${course.id}/edit`}
@@ -253,17 +357,30 @@ export default function StaffCoursesPage() {
                         {course.title}
                       </h3>
                       <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
-                        {formatPrice(course.price)} • {course.max_seats} places
+                        {formatPrice(course.price)}
                       </p>
-                      <span
-                        className={`inline-block mt-2 px-2 py-0.5 rounded-full text-xs font-medium ${
-                          course.type === "public"
-                            ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
-                            : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
-                        }`}
-                      >
-                        {course.type === "public" ? "Public" : "Privé"}
-                      </span>
+                      <div className="flex items-center gap-2 mt-2">
+                        <span
+                          className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                            course.type === "public"
+                              ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+                              : "bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-400"
+                          }`}
+                        >
+                          {course.type === "public" ? "Public" : "Privé"}
+                        </span>
+                        {course.slots.length > 0 && (
+                          <span className="flex items-center gap-1 text-xs text-slate-500">
+                            <Calendar className="w-3 h-3" />
+                            {course.slots.length} session{course.slots.length > 1 ? "s" : ""}
+                          </span>
+                        )}
+                        {course.pendingSlots > 0 && (
+                          <span className="px-1.5 py-0.5 rounded text-xs font-bold bg-yellow-500 text-white">
+                            {course.pendingSlots} à confirmer
+                          </span>
+                        )}
+                      </div>
                     </div>
                     <div className="relative">
                       <button
@@ -283,6 +400,22 @@ export default function StaffCoursesPage() {
                           >
                             <Eye className="w-4 h-4" />
                             Voir
+                          </Link>
+                          <Link
+                            href={`/staff/courses/${course.id}/availability`}
+                            className={`flex items-center gap-2 px-4 py-2 text-sm hover:bg-slate-50 dark:hover:bg-slate-700/50 ${
+                              course.pendingSlots > 0 
+                                ? "text-yellow-600 dark:text-yellow-400" 
+                                : "text-slate-700 dark:text-slate-300"
+                            }`}
+                          >
+                            <Calendar className="w-4 h-4" />
+                            Sessions
+                            {course.pendingSlots > 0 && (
+                              <span className="ml-auto px-1.5 py-0.5 rounded text-xs font-bold bg-yellow-500 text-white">
+                                {course.pendingSlots}
+                              </span>
+                            )}
                           </Link>
                           <Link
                             href={`/staff/courses/${course.id}/edit`}

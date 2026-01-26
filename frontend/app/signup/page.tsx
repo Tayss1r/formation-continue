@@ -24,7 +24,7 @@ import {
 import AuthLayout from "@/components/auth/AuthLayout";
 import { apiClient } from "@/lib/api";
 
-type UserRole = "staff" | "company" | "professor";
+type UserRole = "company" | "professor";
 
 interface SignupData {
   role: UserRole;
@@ -43,7 +43,7 @@ interface SignupData {
 }
 
 const initialData: SignupData = {
-  role: "staff",
+  role: "company",
   email: "",
   password: "",
   confirmPassword: "",
@@ -56,14 +56,8 @@ const initialData: SignupData = {
   specialization: "",
 };
 
+// Staff role removed from public signup - staff accounts created by admin only
 const roleOptions = [
-  {
-    value: "staff" as UserRole,
-    label: "Staff",
-    description: "Personnel administratif de l'université",
-    icon: User,
-    color: "from-blue-500 to-cyan-500",
-  },
   {
     value: "company" as UserRole,
     label: "Entreprise",
@@ -119,7 +113,7 @@ export default function SignupPage() {
     }
 
     // Role-specific validation
-    if (data.role === "staff" || data.role === "professor") {
+    if (data.role === "professor") {
       if (!data.username) errors.username = "Le nom d'utilisateur est requis";
       else if (data.username.length < 3) {
         errors.username = "Le nom d'utilisateur doit contenir au moins 3 caractères";
@@ -155,7 +149,7 @@ export default function SignupPage() {
         phone: data.phone || undefined,
       };
 
-      if (data.role === "staff" || data.role === "professor") {
+      if (data.role === "professor") {
         payload.username = data.username;
       }
 
