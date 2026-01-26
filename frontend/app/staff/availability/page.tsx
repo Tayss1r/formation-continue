@@ -105,9 +105,31 @@ export default function StaffAvailabilityPage() {
     }
   };
 
-  const getCourseName = (courseId: number) => {
-    const course = courses.find((c) => c.id === courseId);
-    return course?.title || `Formation #${courseId}`;
+  // Calculate session numbers per course
+  const getSessionInfo = (slot: AvailabilitySlot) => {
+    // Get the course name
+    const courseName = slot.course?.title || 
+      courses.find((c) => c.id === slot.course_id)?.title || 
+      `Formation #${slot.course_id}`;
+    
+    // Find all slots for this course, sorted by start_date
+    const courseSlots = slots
+      .filter(s => s.course_id === slot.course_id)
+      .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
+    
+    // If only one session, just return the course name
+    if (courseSlots.length <= 1) {
+      return { name: courseName, sessionNumber: null, totalSessions: 1 };
+    }
+    
+    // Find the session number (1-based index)
+    const sessionNumber = courseSlots.findIndex(s => s.id === slot.id) + 1;
+    
+    return { 
+      name: courseName, 
+      sessionNumber, 
+      totalSessions: courseSlots.length 
+    };
   };
 
   const filteredSlots = statusFilter === "all" 
@@ -207,7 +229,9 @@ export default function StaffAvailabilityPage() {
                 Ces sessions ont dépassé leur date limite de réservation et nécessitent votre décision.
               </p>
               <div className="space-y-2">
-                {pendingSlots.slice(0, 3).map((slot) => (
+                {pendingSlots.slice(0, 3).map((slot) => {
+                  const sessionInfo = getSessionInfo(slot);
+                  return (
                   <Link
                     key={slot.id}
                     href={`/staff/courses/${slot.course_id}/availability/${slot.id}/bookings`}
@@ -216,9 +240,16 @@ export default function StaffAvailabilityPage() {
                     <div className="flex items-center gap-3">
                       <Calendar className="w-4 h-4 text-yellow-600" />
                       <div>
-                        <p className="font-medium text-slate-900 dark:text-white text-sm">
-                          {getCourseName(slot.course_id)}
-                        </p>
+                        <div className="flex items-center gap-2">
+                          <p className="font-medium text-slate-900 dark:text-white text-sm">
+                            {sessionInfo.name}
+                          </p>
+                          {sessionInfo.sessionNumber && (
+                            <span className="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 rounded">
+                              Session {sessionInfo.sessionNumber}/{sessionInfo.totalSessions}
+                            </span>
+                          )}
+                        </div>
                         <p className="text-xs text-slate-500">
                           {formatDate(slot.start_date)} • {slot.reserved_seats}/{slot.max_seats} places
                         </p>
@@ -226,7 +257,8 @@ export default function StaffAvailabilityPage() {
                     </div>
                     <ChevronRight className="w-4 h-4 text-slate-400" />
                   </Link>
-                ))}
+                  );
+                })}
                 {pendingSlots.length > 3 && (
                   <p className="text-sm text-yellow-700 dark:text-yellow-400 text-center pt-2">
                     +{pendingSlots.length - 3} autre{pendingSlots.length - 3 > 1 ? "s" : ""} session{pendingSlots.length - 3 > 1 ? "s" : ""}
@@ -334,6 +366,7 @@ export default function StaffAvailabilityPage() {
             {filteredSlots.map((slot) => {
               const deadlinePassed = new Date(slot.booking_deadline) < new Date();
               const isUpcoming = new Date(slot.start_date) > new Date();
+              const sessionInfo = getSessionInfo(slot);
 
               return (
                 <Link
@@ -345,10 +378,15 @@ export default function StaffAvailabilityPage() {
                     <Calendar className="w-6 h-6 text-purple-600 dark:text-purple-400" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex items-center gap-2 mb-1 flex-wrap">
                       <p className="font-medium text-slate-900 dark:text-white truncate">
-                        {getCourseName(slot.course_id)}
+                        {sessionInfo.name}
                       </p>
+                      {sessionInfo.sessionNumber && (
+                        <span className="px-2 py-0.5 text-xs font-medium bg-gradient-to-r from-purple-100 to-pink-100 dark:from-purple-500/20 dark:to-pink-500/20 text-purple-700 dark:text-purple-300 rounded-full">
+                          Session {sessionInfo.sessionNumber}/{sessionInfo.totalSessions}
+                        </span>
+                      )}
                       {getStatusBadge(slot.status)}
                     </div>
                     <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500 dark:text-slate-400">

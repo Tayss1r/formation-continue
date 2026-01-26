@@ -162,7 +162,7 @@ export default function StaffCoursesPage() {
             <CalendarCheck className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
             <div className="flex-1">
               <p className="text-sm text-blue-800 dark:text-blue-300">
-                <strong>Nouveau :</strong> Les formations n&apos;ont plus de dates fixes. 
+                <strong>Remarque : </strong>
                 Utilisez le bouton <span className="inline-flex items-center gap-1"><Calendar className="w-3.5 h-3.5" /> Sessions</span> pour créer des créneaux de disponibilité que les entreprises pourront réserver.
               </p>
             </div>

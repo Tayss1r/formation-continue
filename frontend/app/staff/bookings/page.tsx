@@ -23,6 +23,8 @@ import type { CourseListItem } from "@/types/course";
 interface BookingWithSlot extends Booking {
   slot: AvailabilitySlot;
   courseName: string;
+  sessionNumber: number | null;
+  totalSessions: number;
 }
 
 type BookingStatusFilter = "all" | "reserved" | "confirmed" | "cancelled";
@@ -60,18 +62,38 @@ export default function StaffBookingsPage() {
       // Get bookings for each slot that has reserved seats
       const slotsWithBookings = slotsData.slots.filter(s => s.reserved_seats > 0);
       
+      // Calculate session numbers per course
+      const getSessionInfo = (slot: AvailabilitySlot) => {
+        const courseName = slot.course?.title || 
+          coursesData.courses.find(c => c.id === slot.course_id)?.title || 
+          `Formation #${slot.course_id}`;
+        
+        const courseSlots = slotsData.slots
+          .filter(s => s.course_id === slot.course_id)
+          .sort((a, b) => new Date(a.start_date).getTime() - new Date(b.start_date).getTime());
+        
+        if (courseSlots.length <= 1) {
+          return { courseName, sessionNumber: null, totalSessions: 1 };
+        }
+        
+        const sessionNumber = courseSlots.findIndex(s => s.id === slot.id) + 1;
+        return { courseName, sessionNumber, totalSessions: courseSlots.length };
+      };
+      
       const allBookings: BookingWithSlot[] = [];
       
       for (const slot of slotsWithBookings) {
         try {
           const summary = await getSlotBookings(slot.id);
-          const courseName = coursesData.courses.find(c => c.id === slot.course_id)?.title || `Formation #${slot.course_id}`;
+          const sessionInfo = getSessionInfo(slot);
           
           for (const booking of summary.bookings) {
             allBookings.push({
               ...booking,
               slot,
-              courseName,
+              courseName: sessionInfo.courseName,
+              sessionNumber: sessionInfo.sessionNumber,
+              totalSessions: sessionInfo.totalSessions,
             });
           }
         } catch (err) {
@@ -291,7 +313,14 @@ export default function StaffBookingsPage() {
                     {getStatusBadge(booking.status)}
                   </div>
                   <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-slate-500 dark:text-slate-400">
-                    <span className="truncate">{booking.courseName}</span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="truncate">{booking.courseName}</span>
+                      {booking.sessionNumber && (
+                        <span className="px-1.5 py-0.5 text-xs font-medium bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300 rounded">
+                          S{booking.sessionNumber}/{booking.totalSessions}
+                        </span>
+                      )}
+                    </span>
                     <span className="flex items-center gap-1">
                       <Users className="w-3.5 h-3.5" />
                       {booking.employee_count} participant{booking.employee_count > 1 ? "s" : ""}

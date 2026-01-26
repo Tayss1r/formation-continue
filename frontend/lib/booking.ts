@@ -33,6 +33,9 @@ function extractErrorMessage(error: unknown, fallback: string): string {
   
   const err = error as Record<string, unknown>;
   
+  // Handle our custom error format with "message" field first
+  if (typeof err.message === "string") return err.message;
+  
   // Handle FastAPI detail field (can be string or array of validation errors)
   if (err.detail) {
     if (typeof err.detail === "string") return err.detail;
@@ -43,14 +46,13 @@ function extractErrorMessage(error: unknown, fallback: string): string {
         .filter(Boolean)
         .join(", ") || fallback;
     }
-    // Object detail - try to stringify
-    if (typeof err.detail === "object") {
+    // Object detail with message field
+    if (typeof err.detail === "object" && err.detail !== null) {
+      const detail = err.detail as Record<string, unknown>;
+      if (typeof detail.message === "string") return detail.message;
       return JSON.stringify(err.detail);
     }
   }
-  
-  // Fallback to message field
-  if (typeof err.message === "string") return err.message;
   
   return fallback;
 }
