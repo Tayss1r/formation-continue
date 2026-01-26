@@ -53,8 +53,11 @@ class SignupRequest(BaseModel):
     """
     Unified signup request that handles all role types.
     Validates required fields based on the selected role.
+    
+    NOTE: Staff role is NOT allowed for public signup.
+    Staff accounts must be created by admin only.
     """
-    role: Literal["staff", "company", "professor"]
+    role: Literal["company", "professor"]  # Staff excluded from public signup
     
     # Common fields
     email: EmailStr
@@ -77,11 +80,11 @@ class SignupRequest(BaseModel):
     @model_validator(mode='after')
     def validate_role_fields(self):
         """Validate required fields based on role"""
+        # Staff is not allowed via public signup
         if self.role == "staff":
-            if not self.username:
-                raise ValueError("Username is required for staff signup")
+            raise ValueError("Staff accounts cannot be created via public signup")
                 
-        elif self.role == "company":
+        if self.role == "company":
             if not self.company_name:
                 raise ValueError("Company name is required for company signup")
             if not self.industry_sector:

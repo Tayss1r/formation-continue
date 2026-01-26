@@ -125,7 +125,10 @@ class CourseService:
         session: AsyncSession,
         image: Optional[UploadFile] = None
     ) -> Course:
-        """Create a new course"""
+        """
+        Create a new course (template).
+        Dates/scheduling are handled separately via availability slots.
+        """
         # Handle image upload if provided
         image_path = None
         if image:
@@ -140,9 +143,7 @@ class CourseService:
             price=course_data.price,
             max_seats=course_data.max_seats,
             duration_hours=course_data.duration_hours,
-            schedule=course_data.schedule,
-            start_date=course_data.start_date,
-            end_date=course_data.end_date,
+            sector=course_data.sector,
             professor_id=course_data.professor_id,
             is_published=course_data.is_published,
             image_path=image_path,
@@ -261,3 +262,44 @@ class CourseService:
         query = select(Course.id).where(Course.id == course_id)
         result = await session.execute(query)
         return result.scalar_one_or_none() is not None
+    
+    @staticmethod
+    async def course_has_bookings(course_id: int, session: AsyncSession) -> bool:
+        """
+        Check if a course has any bookings through its availability slots.
+        Returns True if any slot has reserved_seats > 0.
+        """
+        from ..db.models import CourseAvailability, CompanyBooking, BookingStatus
+        from sqlalchemy import exists, and_
+        
+        # Check if any booking exists for any availability slot of this course
+        # that is not cancelled
+        subquery = (
+            select(CompanyBooking.id)
+            .join(CourseAvailability, CompanyBooking.availability_slot_id == CourseAvailability.id)
+            .where(
+                and_(
+                    CourseAvailability.course_id == course_id,
+                    CompanyBooking.status != BookingStatus.CANCELLED
+                )
+            )
+        )
+        
+        query = select(exists(subquery))
+        result = await session.execute(query)
+        return result.scalar() or False
+    
+    @staticmethod
+    async def get_course_editability(course_id: int, session: AsyncSession) -> dict:
+        """
+        Check if a course's price and seats can be edited.
+        Returns info about editability and reason if not editable.
+        """
+        has_bookings = await CourseService.course_has_bookings(course_id, session)
+        
+        return {
+            "can_edit_price": not has_bookings,
+            "can_edit_seats": not has_bookings,
+            "has_bookings": has_bookings,
+            "reason": "Impossible de modifier après des réservations" if has_bookings else None
+        }

@@ -1,20 +1,21 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Literal
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
 class CourseBase(BaseModel):
-    """Base schema for course data"""
+    """
+    Base schema for course data.
+    Course is a template - dates are managed via availability slots.
+    """
     title: str = Field(..., min_length=3, max_length=200)
     description: str = Field(..., min_length=10)
     short_description: Optional[str] = Field(None, max_length=300)
     type: Literal["public", "private"] = "public"
     price: float = Field(..., ge=0)
-    max_seats: int = Field(..., ge=1)
+    max_seats: int = Field(..., ge=1, description="Default max seats per session")
     duration_hours: Optional[int] = Field(None, ge=1)
-    schedule: Optional[str] = Field(None, max_length=500)
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
+    sector: Optional[str] = Field(None, max_length=100, description="Target industry sector")
     professor_id: Optional[int] = None
     is_published: bool = True
 
@@ -28,9 +29,7 @@ class CourseCreate(BaseModel):
     price: float = Field(..., ge=0)
     max_seats: int = Field(..., ge=1)
     duration_hours: Optional[int] = Field(None, ge=1)
-    schedule: Optional[str] = Field(None, max_length=500)
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
+    sector: Optional[str] = Field(None, max_length=100)
     professor_id: Optional[int] = None
     is_published: bool = True
 
@@ -44,9 +43,7 @@ class CourseUpdate(BaseModel):
     price: Optional[float] = Field(None, ge=0)
     max_seats: Optional[int] = Field(None, ge=1)
     duration_hours: Optional[int] = Field(None, ge=1)
-    schedule: Optional[str] = Field(None, max_length=500)
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
+    sector: Optional[str] = Field(None, max_length=100)
     professor_id: Optional[int] = None
     is_published: Optional[bool] = None
 
@@ -80,9 +77,7 @@ class CourseOut(BaseModel):
     max_seats: int
     image_path: Optional[str] = None
     duration_hours: Optional[int] = None
-    schedule: Optional[str] = None
-    start_date: Optional[datetime] = None
-    end_date: Optional[datetime] = None
+    sector: Optional[str] = None
     is_published: bool
     created_at: datetime
     updated_at: datetime
@@ -102,8 +97,7 @@ class CourseListOut(BaseModel):
     max_seats: int
     image_path: Optional[str] = None
     duration_hours: Optional[int] = None
-    schedule: Optional[str] = None
-    start_date: Optional[datetime] = None
+    sector: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -121,3 +115,11 @@ class CourseDeleteResponse(BaseModel):
     """Schema for course deletion response"""
     message: str
     course_id: int
+
+
+class CourseEditabilityOut(BaseModel):
+    """Schema for course editability status"""
+    can_edit_price: bool
+    can_edit_seats: bool
+    has_bookings: bool
+    reason: Optional[str] = None

@@ -36,6 +36,21 @@ class RequestStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class AvailabilitySlotStatus(str, Enum):
+    """Status of a course availability slot"""
+    OPEN = "open"                    # Accepting bookings
+    PENDING_REVIEW = "pending_review"  # Booking deadline reached, awaiting staff decision
+    CONFIRMED = "confirmed"          # Session confirmed by staff
+    CANCELLED = "cancelled"          # Session cancelled by staff
+
+
+class BookingStatus(str, Enum):
+    """Status of a company booking"""
+    RESERVED = "reserved"            # Seats reserved, awaiting session confirmation
+    CONFIRMED = "confirmed"          # Session confirmed, booking is final
+    CANCELLED = "cancelled"          # Booking cancelled (by company or due to session cancellation)
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -174,6 +189,10 @@ class Professor(Base):
 
 
 class Course(Base):
+    """
+    Course represents a training template/offering.
+    Dates and scheduling are handled via CourseAvailability slots.
+    """
     __tablename__ = "courses"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -199,11 +218,11 @@ class Course(Base):
     # Image storage (local filesystem path)
     image_path: Mapped[Optional[str]] = mapped_column(nullable=True)
     
-    # Schedule/duration information
+    # Duration information (template info, not fixed dates)
     duration_hours: Mapped[Optional[int]] = mapped_column(nullable=True)
-    schedule: Mapped[Optional[str]] = mapped_column(nullable=True)
-    start_date: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
-    end_date: Mapped[Optional[datetime]] = mapped_column(TIMESTAMP(timezone=True), nullable=True)
+    
+    # Industry sector for targeting
+    sector: Mapped[Optional[str]] = mapped_column(nullable=True, index=True)
     
     # Track who created the course (staff user)
     created_by_id: Mapped[Optional[int]] = mapped_column(
@@ -251,6 +270,154 @@ class Course(Base):
         "EnrollmentCode",
         back_populates="course",
     )
+    
+    # Availability slots for this course
+    availability_slots = relationship(
+        "CourseAvailability",
+        back_populates="course",
+        cascade="all, delete-orphan",
+    )
+
+
+class CourseAvailability(Base):
+    """
+    Represents a specific date slot when a course is available.
+    Companies book these slots, not courses directly.
+    """
+    __tablename__ = "course_availability"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    course_id: Mapped[int] = mapped_column(
+        ForeignKey("courses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    
+    # Schedule information
+    start_date: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+    )
+    end_date: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+    )
+    schedule: Mapped[Optional[str]] = mapped_column(nullable=True)  # e.g., "Mon-Fri 9:00-17:00"
+    
+    # Seat management
+    max_seats: Mapped[int] = mapped_column(nullable=False)
+    min_seats: Mapped[int] = mapped_column(default=1, nullable=False)  # Recommended threshold
+    reserved_seats: Mapped[int] = mapped_column(default=0, nullable=False)  # Calculated from bookings
+    
+    # Booking deadline - after this, slot moves to pending_review
+    booking_deadline: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+    )
+    
+    # Status management
+    status: Mapped[AvailabilitySlotStatus] = mapped_column(
+        SQLEnum(
+            AvailabilitySlotStatus,
+            name="availability_slot_status",
+            validate_strings=True,
+            create_constraint=True,
+            values_callable=lambda obj: [e.value for e in obj]
+        ),
+        nullable=False,
+        server_default=AvailabilitySlotStatus.OPEN.value,
+    )
+    
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+    
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        onupdate=datetime.now,
+        nullable=False,
+    )
+    
+    # Relationships
+    course = relationship("Course", back_populates="availability_slots")
+    bookings = relationship(
+        "CompanyBooking",
+        back_populates="availability_slot",
+        cascade="all, delete-orphan",
+    )
+    
+    @property
+    def remaining_seats(self) -> int:
+        """Calculate remaining available seats"""
+        return self.max_seats - self.reserved_seats
+
+
+class CompanyBooking(Base):
+    """
+    Represents a company's booking for a specific course availability slot.
+    Bookings are atomic - all employees or none.
+    """
+    __tablename__ = "company_bookings"
+    __table_args__ = (
+        UniqueConstraint("company_id", "availability_slot_id", name="uq_company_slot_booking"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    
+    availability_slot_id: Mapped[int] = mapped_column(
+        ForeignKey("course_availability.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    
+    # Number of employees for this booking
+    employee_count: Mapped[int] = mapped_column(nullable=False)
+    
+    # Booking status
+    status: Mapped[BookingStatus] = mapped_column(
+        SQLEnum(
+            BookingStatus,
+            name="booking_status",
+            validate_strings=True,
+            create_constraint=True,
+            values_callable=lambda obj: [e.value for e in obj]
+        ),
+        nullable=False,
+        server_default=BookingStatus.RESERVED.value,
+    )
+    
+    # Notes from company (optional)
+    notes: Mapped[Optional[str]] = mapped_column(nullable=True)
+    
+    # Staff notes (for internal use)
+    staff_notes: Mapped[Optional[str]] = mapped_column(nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+    
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        onupdate=datetime.now,
+        nullable=False,
+    )
+    
+    # Relationships
+    company = relationship("Company", backref="bookings")
+    availability_slot = relationship("CourseAvailability", back_populates="bookings")
 
 
 class TrainingRequest(Base):
@@ -343,3 +510,44 @@ class Enrollment(Base):
 
     employee = relationship("Employee", back_populates="enrollments")
     course = relationship("Course", back_populates="enrollments")
+
+
+class NewsletterSubscription(Base):
+    """
+    Newsletter subscription model for sector-targeted campaigns.
+    Allows both authenticated company users and public users to subscribe.
+    """
+    __tablename__ = "newsletter_subscriptions"
+    __table_args__ = (
+        UniqueConstraint("email", name="uq_newsletter_email"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    email: Mapped[str] = mapped_column(unique=True, nullable=False, index=True)
+    sector: Mapped[str] = mapped_column(nullable=False, index=True)
+    
+    # Optional link to company (if authenticated user)
+    company_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("companies.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    
+    # Subscription status
+    is_active: Mapped[bool] = mapped_column(
+        server_default="true",
+        nullable=False,
+    )
+    
+    subscribed_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+    
+    unsubscribed_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+
+    company = relationship("Company", backref="newsletter_subscriptions")

@@ -5,6 +5,9 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 
 from .api.courses import course_router
+from .api.newsletter import newsletter_router
+from .api.availability import availability_router
+from .api.booking import booking_router
 from .middleware import register_middleware
 
 from .error import register_all_errors
@@ -52,3 +55,6 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 # API Routes
 app.include_router(auth_router, prefix=f"/api/{API_VERSION}/auth", tags=['Authentication'])
 app.include_router(course_router, prefix=f"/api/{API_VERSION}/courses", tags=['Courses'])
+app.include_router(newsletter_router, prefix=f"/api/{API_VERSION}/newsletter", tags=['Newsletter'])
+app.include_router(availability_router, prefix=f"/api/{API_VERSION}/availability", tags=['Availability'])
+app.include_router(booking_router, prefix=f"/api/{API_VERSION}/bookings", tags=['Bookings'])

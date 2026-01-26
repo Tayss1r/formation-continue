@@ -13,8 +13,10 @@ from ..schemas.course_schema import (
     CourseListOut,
     CourseListResponse,
     CourseDeleteResponse,
+    CourseEditabilityOut,
 )
 from ..services.course_service import CourseService
+from ..error import CourseHasBookings
 
 course_router = APIRouter()
 
@@ -141,6 +143,37 @@ async def get_staff_course_details(
     return CourseOut.model_validate(course)
 
 
+@course_router.get("/staff/course/{course_id}/editability", response_model=CourseEditabilityOut)
+async def get_course_editability(
+    course_id: int,
+    current_user: User = Depends(get_staff_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Check if a course's price and seats can be edited.
+    Returns editability status and reason if not editable.
+    Staff only.
+    """
+    course = await CourseService.get_course_by_id(course_id, session, include_relations=False)
+    
+    if not course:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Course not found"
+        )
+    
+    # Check permissions
+    if current_user.role != UserRole.ADMIN.value and course.created_by_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You don't have permission to view this course"
+        )
+    
+    editability = await CourseService.get_course_editability(course_id, session)
+    
+    return CourseEditabilityOut(**editability)
+
+
 @course_router.post("", response_model=CourseOut, status_code=status.HTTP_201_CREATED)
 async def create_course(
     title: str = Form(...),
@@ -150,9 +183,7 @@ async def create_course(
     type: str = Form("public"),
     short_description: Optional[str] = Form(None),
     duration_hours: Optional[int] = Form(None),
-    schedule: Optional[str] = Form(None),
-    start_date: Optional[str] = Form(None),
-    end_date: Optional[str] = Form(None),
+    sector: Optional[str] = Form(None),
     professor_id: Optional[int] = Form(None),
     is_published: bool = Form(True),
     image: Optional[UploadFile] = File(None),
@@ -160,33 +191,10 @@ async def create_course(
     session: AsyncSession = Depends(get_session)
 ):
     """
-    Create a new course with optional image upload.
+    Create a new course (template) with optional image upload.
+    Course dates are managed via availability slots, not on the course itself.
     Staff only.
     """
-    from datetime import datetime
-    
-    # Parse dates if provided
-    parsed_start_date = None
-    parsed_end_date = None
-    
-    if start_date:
-        try:
-            parsed_start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid start_date format. Use ISO format."
-            )
-    
-    if end_date:
-        try:
-            parsed_end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid end_date format. Use ISO format."
-            )
-    
     course_data = CourseCreate(
         title=title,
         description=description,
@@ -195,9 +203,7 @@ async def create_course(
         price=price,
         max_seats=max_seats,
         duration_hours=duration_hours,
-        schedule=schedule,
-        start_date=parsed_start_date,
-        end_date=parsed_end_date,
+        sector=sector,
         professor_id=professor_id,
         is_published=is_published
     )
@@ -222,9 +228,7 @@ async def update_course(
     type: Optional[str] = Form(None),
     short_description: Optional[str] = Form(None),
     duration_hours: Optional[int] = Form(None),
-    schedule: Optional[str] = Form(None),
-    start_date: Optional[str] = Form(None),
-    end_date: Optional[str] = Form(None),
+    sector: Optional[str] = Form(None),
     professor_id: Optional[int] = Form(None),
     is_published: Optional[bool] = Form(None),
     image: Optional[UploadFile] = File(None),
@@ -232,11 +236,12 @@ async def update_course(
     session: AsyncSession = Depends(get_session)
 ):
     """
-    Update an existing course. Only the course creator or admin can update.
+    Update an existing course (template). Only the course creator or admin can update.
+    Course dates are managed via availability slots.
     Staff only.
-    """
-    from datetime import datetime
     
+    BUSINESS RULE: Price and max_seats cannot be modified if there are existing bookings.
+    """
     course = await CourseService.get_course_by_id(course_id, session, include_relations=False)
     
     if not course:
@@ -252,27 +257,13 @@ async def update_course(
             detail="You don't have permission to update this course"
         )
     
-    # Parse dates if provided
-    parsed_start_date = None
-    parsed_end_date = None
-    
-    if start_date:
-        try:
-            parsed_start_date = datetime.fromisoformat(start_date.replace('Z', '+00:00'))
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid start_date format. Use ISO format."
-            )
-    
-    if end_date:
-        try:
-            parsed_end_date = datetime.fromisoformat(end_date.replace('Z', '+00:00'))
-        except ValueError:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail="Invalid end_date format. Use ISO format."
-            )
+    # BUSINESS RULE: Check if price or seats are being modified when bookings exist
+    if price is not None or max_seats is not None:
+        has_bookings = await CourseService.course_has_bookings(course_id, session)
+        if has_bookings:
+            if (price is not None and price != course.price) or \
+               (max_seats is not None and max_seats != course.max_seats):
+                raise CourseHasBookings()
     
     course_data = CourseUpdate(
         title=title,
@@ -282,9 +273,7 @@ async def update_course(
         price=price,
         max_seats=max_seats,
         duration_hours=duration_hours,
-        schedule=schedule,
-        start_date=parsed_start_date,
-        end_date=parsed_end_date,
+        sector=sector,
         professor_id=professor_id,
         is_published=is_published
     )

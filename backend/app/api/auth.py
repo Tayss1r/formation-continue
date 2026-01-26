@@ -20,7 +20,7 @@ from ..schemas.auth_schema import SignupRequest, SignupResponse as AuthSignupRes
 from ..db.database import get_session
 from ..services.user_service import UserService
 from ..utils import create_access_token, create_url_safe_token, decode_url_safe_token, send_verification_email, verify, hash, decode_token, send_verification_code_email
-from ..error import AccountNotVerified, InvalidCredentials, InvalidToken, InvalidResetCode, PasswordsDoNotMatch, UserNotFound, RegistrationFailed, InvalidVerificationCode
+from ..error import AccountNotVerified, InvalidCredentials, InvalidToken, InvalidResetCode, PasswordsDoNotMatch, UserNotFound, RegistrationFailed, InvalidVerificationCode, StaffSignupNotAllowed
 
 logger = logging.getLogger(__name__)
 
@@ -122,15 +122,21 @@ async def signup(signup_data: SignupRequest, session: AsyncSession = Depends(get
     Role-based user registration.
     
     Supported roles:
-    - staff: Requires username, email, password, fullname
     - company: Requires email, password, fullname, company_name, industry_sector, billing_info
     - professor: Requires username, email, password, fullname, specialization
+    
+    NOTE: Staff accounts CANNOT be created via public signup.
+    Staff must be created manually by an admin or via internal admin tooling.
     
     On success:
     - Creates user record (and Company/Professor if applicable)
     - Sends 6-digit verification code via email using Celery
     - Returns success message with email
     """
+    # SECURITY CRITICAL: Block staff signup via public endpoint
+    if signup_data.role == "staff":
+        raise StaffSignupNotAllowed()
+    
     email = signup_data.email
     
     # Check if user already exists
@@ -147,12 +153,7 @@ async def signup(signup_data: SignupRequest, session: AsyncSession = Depends(get
     new_user = None
     
     try:
-        if signup_data.role == "staff":
-            # Staff signup
-            user_data = signup_data.get_user_data()
-            new_user = await UserService.create_staff_user(user_data, session)
-            
-        elif signup_data.role == "company":
+        if signup_data.role == "company":
             # Company signup - generate username from company name
             user_data = signup_data.get_user_data()
             if not user_data.get("username") and signup_data.company_name:
@@ -170,6 +171,7 @@ async def signup(signup_data: SignupRequest, session: AsyncSession = Depends(get
             new_user = await UserService.create_professor_user(user_data, professor_data, session)
             
         else:
+            # This should not happen since staff is blocked above
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail={"message": "Invalid role", "error_code": "invalid_role"}
