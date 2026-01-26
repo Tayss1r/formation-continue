@@ -170,6 +170,11 @@ class CourseHasBookings(CustomException):
     pass
 
 
+class OverlappingSessionDates(CustomException):
+    """Cannot create session with dates that overlap an existing session for the same course"""
+    pass
+
+
 def create_exception_handler(
     status_code: int, initial_detail: Any
 ) -> Callable[[Request, Exception], JSONResponse]:
@@ -523,6 +528,17 @@ def register_all_errors(app: FastAPI):
             initial_detail={
                 "message": "Cannot modify course price or seats because there are existing bookings",
                 "error_code": "course_has_bookings",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        OverlappingSessionDates,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "Les dates de cette session chevauchent une session existante pour ce cours",
+                "error_code": "overlapping_session_dates",
             },
         ),
     )

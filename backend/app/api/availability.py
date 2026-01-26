@@ -21,6 +21,7 @@ from ..schemas.availability_schema import (
     AvailabilityWithBookingStatusResponse,
     SlotStatusUpdate,
     SlotConfirmResponse,
+    AvailabilityCourseInfo,
 )
 from ..error import AvailabilitySlotNotFound, CourseNotFound, DeadlineNotReached
 
@@ -213,7 +214,13 @@ async def get_my_availability_slots(
                 reserved_seats=slot.reserved_seats,
                 remaining_seats=slot.max_seats - slot.reserved_seats,
                 booking_deadline=slot.booking_deadline,
-                status=slot.status.value if hasattr(slot.status, 'value') else slot.status
+                status=slot.status.value if hasattr(slot.status, 'value') else slot.status,
+                course=AvailabilityCourseInfo(
+                    id=slot.course.id,
+                    title=slot.course.title,
+                    price=slot.course.price,
+                    duration_hours=slot.course.duration_hours
+                ) if slot.course else None
             )
             for slot in slots
         ],
@@ -411,7 +418,13 @@ async def get_pending_review_slots(
                 reserved_seats=slot.reserved_seats,
                 remaining_seats=slot.max_seats - slot.reserved_seats,
                 booking_deadline=slot.booking_deadline,
-                status=slot.status.value if hasattr(slot.status, 'value') else slot.status
+                status=slot.status.value if hasattr(slot.status, 'value') else slot.status,
+                course=AvailabilityCourseInfo(
+                    id=slot.course.id,
+                    title=slot.course.title,
+                    price=slot.course.price,
+                    duration_hours=slot.course.duration_hours
+                ) if slot.course else None
             )
             for slot in filtered_slots
         ],

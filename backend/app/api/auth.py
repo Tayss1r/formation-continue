@@ -665,7 +665,7 @@ async def update_curr_user(
     if not update_data:
         return user
     
-    # Handle email update separately - requires verification
+    # Handle email update separately - requires two-step verification
     if 'email' in update_data and update_data['email'] != user.email:
         new_email = update_data['email']
         
@@ -680,31 +680,41 @@ async def update_curr_user(
         # Remove email from update_data to prevent immediate update
         update_data.pop('email')
         
-        # Send verification email to new address with user_id in token
-        token = create_url_safe_token({"email": new_email, "user_id": user.id})
-        link = f"http://localhost:4200/verify-email-change/{token}"
+        # Generate 6-digit code for OLD email verification
+        from ..db.redis import store_email_change_old_code
+        code = str(random.randint(100000, 999999))
+        hashed_code = hash(code)
         
+        # Store code and new email in Redis
+        await store_email_change_old_code(user.id, hashed_code, new_email)
+        
+        # Send verification code to OLD email
         html = f"""
         <!DOCTYPE html>
         <html lang="en">
         <head>
             <meta charset="UTF-8">
-            <title>Verify Your New Email</title>
+            <title>Vérification de changement d'email</title>
         </head>
         <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0;">
             <table align="center" width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; margin-top: 40px; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
                 <tr>
                     <td style="padding: 40px; text-align: center;">
-                        <h2 style="color: #333333;">Vérification de changement d'email</h2>
+                        <h2 style="color: #333333;">Changement d'email demandé</h2>
                         <p style="color: #555555; font-size: 16px; line-height: 1.5;">
-                            Vous avez demandé à changer votre email vers: <strong>{new_email}</strong>
+                            Une demande de changement d'email vers <strong>{new_email}</strong> a été effectuée.
                         </p>
-                        <a href="{link}" 
-                           style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #4CAF50; color: #ffffff; text-decoration: none; font-weight: bold; border-radius: 5px;">
-                            Confirmer le changement d'email
-                        </a>
+                        <p style="color: #555555; font-size: 16px; line-height: 1.5;">
+                            Utilisez le code suivant pour confirmer cette demande:
+                        </p>
+                        <div style="margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
+                            <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #4CAF50;">{code}</span>
+                        </div>
+                        <p style="color: #888888; font-size: 14px;">
+                            Ce code expire dans 10 minutes.
+                        </p>
                         <p style="margin-top: 30px; color: #888888; font-size: 14px;">
-                            Si vous n'avez pas demandé ce changement, vous pouvez ignorer cet email.
+                            Si vous n'avez pas demandé ce changement, ignorez cet email et votre email actuel restera inchangé.
                         </p>
                     </td>
                 </tr>
@@ -713,22 +723,181 @@ async def update_curr_user(
         </html>
         """
         
-        emails = [new_email]
-        subject = "Vérification de changement d'email"
+        emails = [user.email]  # Send to OLD email
+        subject = "Code de vérification - Changement d'email"
         send_email.delay(emails, subject, html)
         
         # Update other fields if any
         if update_data:
-            updated_user = await UserService.update_user(user, update_data, session)
-        else:
-            updated_user = user
+            await UserService.update_user(user, update_data, session)
             
-        # Return response indicating email verification sent
-        raise HTTPException(
-            status_code=status.HTTP_200_OK,
-            detail="Un email de vérification a été envoyé à votre nouvelle adresse. Veuillez vérifier votre email pour confirmer le changement."
+        # Return response indicating code sent to old email
+        return JSONResponse(
+            content={
+                "message": "Un code de vérification a été envoyé à votre email actuel.",
+                "email_change_step": "verify_old_email",
+                "pending_email": new_email
+            },
+            status_code=status.HTTP_200_OK
         )
     
     # Update user (non-email fields)
     updated_user = await UserService.update_user(user, update_data, session)
     return updated_user
+
+
+# ==================== EMAIL CHANGE VERIFICATION ====================
+
+from pydantic import BaseModel
+
+class VerifyOldEmailCodeRequest(BaseModel):
+    code: str
+
+class VerifyNewEmailCodeRequest(BaseModel):
+    code: str
+
+
+@auth_router.post('/me/verify-old-email')
+async def verify_old_email_for_change(
+    data: VerifyOldEmailCodeRequest,
+    user = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Step 1: Verify code sent to old email.
+    If valid, send verification code to new email.
+    """
+    from ..db.redis import get_email_change_old_data, delete_email_change_old_data, store_email_change_new_code
+    
+    # Get stored data
+    stored_data = await get_email_change_old_data(user.id)
+    if not stored_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucune demande de changement d'email en cours ou le code a expiré"
+        )
+    
+    # Verify code
+    if not verify(data.code, stored_data['hashed_code']):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Code invalide"
+        )
+    
+    new_email = stored_data['new_email']
+    
+    # Delete old email verification data
+    await delete_email_change_old_data(user.id)
+    
+    # Check if email is still available
+    existing_user = await UserService.get_user_by_email(new_email, session)
+    if existing_user:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="L'email est déjà utilisé par un autre compte"
+        )
+    
+    # Generate code for NEW email
+    code = str(random.randint(100000, 999999))
+    hashed_code = hash(code)
+    
+    # Store code for new email verification
+    await store_email_change_new_code(user.id, hashed_code, new_email)
+    
+    # Send verification code to NEW email
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <title>Confirmez votre nouvel email</title>
+    </head>
+    <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0;">
+        <table align="center" width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; margin-top: 40px; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+            <tr>
+                <td style="padding: 40px; text-align: center;">
+                    <h2 style="color: #333333;">Confirmez votre nouvel email</h2>
+                    <p style="color: #555555; font-size: 16px; line-height: 1.5;">
+                        Utilisez le code suivant pour confirmer ce nouvel email:
+                    </p>
+                    <div style="margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
+                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #4CAF50;">{code}</span>
+                    </div>
+                    <p style="color: #888888; font-size: 14px;">
+                        Ce code expire dans 10 minutes.
+                    </p>
+                </td>
+            </tr>
+        </table>
+    </body>
+    </html>
+    """
+    
+    emails = [new_email]  # Send to NEW email
+    subject = "Code de confirmation - Nouvel email"
+    send_email.delay(emails, subject, html)
+    
+    return JSONResponse(
+        content={
+            "message": "Code vérifié! Un code de confirmation a été envoyé à votre nouvel email.",
+            "email_change_step": "verify_new_email",
+            "pending_email": new_email
+        },
+        status_code=status.HTTP_200_OK
+    )
+
+
+@auth_router.post('/me/verify-new-email')
+async def verify_new_email_for_change(
+    data: VerifyNewEmailCodeRequest,
+    user = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Step 2: Verify code sent to new email.
+    If valid, update the user's email.
+    """
+    from ..db.redis import get_email_change_new_data, delete_email_change_new_data
+    
+    # Get stored data
+    stored_data = await get_email_change_new_data(user.id)
+    if not stored_data:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Aucune vérification en cours ou le code a expiré"
+        )
+    
+    # Verify code
+    if not verify(data.code, stored_data['hashed_code']):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Code invalide"
+        )
+    
+    new_email = stored_data['new_email']
+    
+    # Final check if email is still available
+    existing_user = await UserService.get_user_by_email(new_email, session)
+    if existing_user and existing_user.id != user.id:
+        await delete_email_change_new_data(user.id)
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="L'email est déjà utilisé par un autre compte"
+        )
+    
+    # Update email
+    user.email = new_email
+    await session.commit()
+    await session.refresh(user)
+    
+    # Delete verification data
+    await delete_email_change_new_data(user.id)
+    
+    return JSONResponse(
+        content={
+            "message": "Email changé avec succès!",
+            "email_change_step": "completed",
+            "new_email": new_email
+        },
+        status_code=status.HTTP_200_OK
+    )

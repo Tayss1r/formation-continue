@@ -31,12 +31,12 @@ class BookingStaffUpdate(BaseModel):
 class BookingCompanyInfo(BaseModel):
     """Company info for booking response"""
     id: int
-    company_name: str = Field(alias="name")
+    company_name: str
     email: Optional[str] = None
     phone: Optional[str] = None
     industry_sector: Optional[str] = None
     
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True)
+    model_config = ConfigDict(from_attributes=True)
 
 
 class BookingSlotInfo(BaseModel):

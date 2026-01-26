@@ -173,6 +173,7 @@ class AvailabilityListOut(BaseModel):
     remaining_seats: int
     booking_deadline: datetime
     status: AvailabilityStatus
+    course: Optional[AvailabilityCourseInfo] = None
     
     model_config = ConfigDict(from_attributes=True)
 

@@ -21,12 +21,59 @@ from ..error import (
     InvalidAvailabilityDates,
     SlotHasBookings,
     InvalidSlotStatus,
-    CourseNotFound
+    CourseNotFound,
+    OverlappingSessionDates
 )
 
 
 class AvailabilityService:
     """Service for managing course availability slots"""
+    
+    @staticmethod
+    async def check_overlapping_dates(
+        course_id: int,
+        start_date: datetime,
+        end_date: datetime,
+        session: AsyncSession,
+        exclude_slot_id: Optional[int] = None
+    ) -> bool:
+        """
+        Check if the given date range overlaps with any existing session for the same course.
+        
+        Two date ranges overlap if:
+        - New session starts before existing ends AND new session ends after existing starts
+        
+        Args:
+            course_id: The course ID
+            start_date: New session start date
+            end_date: New session end date
+            session: Database session
+            exclude_slot_id: Slot ID to exclude (for updates)
+            
+        Returns:
+            True if there's an overlap, False otherwise
+        """
+        # Only check against non-cancelled slots
+        query = select(CourseAvailability).where(
+            and_(
+                CourseAvailability.course_id == course_id,
+                CourseAvailability.status != AvailabilitySlotStatus.CANCELLED,
+                # Overlap condition: starts before other ends AND ends after other starts
+                CourseAvailability.start_date < end_date,
+                CourseAvailability.end_date > start_date
+            )
+        )
+        
+        # Exclude the current slot when updating
+        if exclude_slot_id:
+            query = query.where(CourseAvailability.id != exclude_slot_id)
+        
+        # Just check if any row exists (limit 1 for efficiency)
+        query = query.limit(1)
+        result = await session.execute(query)
+        overlapping_slot = result.scalar_one_or_none()
+        
+        return overlapping_slot is not None
     
     @staticmethod
     async def get_slot_by_id(
@@ -145,6 +192,16 @@ class AvailabilityService:
         if not course:
             raise CourseNotFound()
         
+        # Check for overlapping sessions
+        overlap = await AvailabilityService.check_overlapping_dates(
+            course_id=slot_data.course_id,
+            start_date=slot_data.start_date,
+            end_date=slot_data.end_date,
+            session=session
+        )
+        if overlap:
+            raise OverlappingSessionDates()
+        
         # Create slot
         slot = CourseAvailability(
             course_id=slot_data.course_id,
@@ -185,8 +242,23 @@ class AvailabilityService:
         if slot.status not in [AvailabilitySlotStatus.OPEN]:
             raise InvalidSlotStatus()
         
-        # Update fields
+        # Check for overlapping sessions if dates are being updated
         update_dict = update_data.model_dump(exclude_unset=True)
+        new_start = update_dict.get('start_date', slot.start_date)
+        new_end = update_dict.get('end_date', slot.end_date)
+        
+        if 'start_date' in update_dict or 'end_date' in update_dict:
+            overlap = await AvailabilityService.check_overlapping_dates(
+                course_id=slot.course_id,
+                start_date=new_start,
+                end_date=new_end,
+                session=session,
+                exclude_slot_id=slot.id
+            )
+            if overlap:
+                raise OverlappingSessionDates()
+        
+        # Update fields
         for field, value in update_dict.items():
             if value is not None:
                 setattr(slot, field, value)
