@@ -2,10 +2,14 @@ from celery import Celery
 from .mail import create_message, mail
 from typing import List
 from asgiref.sync import async_to_sync
+import logging
 
-celery_app =Celery()
+logger = logging.getLogger(__name__)
+
+celery_app = Celery()
 
 celery_app.config_from_object('app.core.config')
+
 
 @celery_app.task(name='app.celery_tasks.send_email')
 def send_email(recipients: List[str], subject: str, body: str):

@@ -231,6 +231,80 @@ async def get_my_availability_slots(
     )
 
 
+@availability_router.get("/staff/course/{course_id}", response_model=AvailabilityListResponse)
+async def get_staff_course_availability(
+    course_id: int,
+    page: int = Query(1, ge=1),
+    per_page: int = Query(20, ge=1, le=50),
+    status: Optional[str] = Query(None, description="Filter by status: open, pending_review, confirmed, cancelled"),
+    current_user: User = Depends(get_staff_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Get all availability slots for a specific course (all statuses).
+    Staff only. Shows all slots regardless of deadline or status.
+    """
+    # Verify course ownership
+    from ..services.course_service import CourseService
+    course = await CourseService.get_course_by_id(course_id, session)
+    
+    if not course:
+        raise CourseNotFound()
+    
+    # Check ownership (unless admin)
+    if current_user.role != UserRole.ADMIN.value and course.created_by_id != current_user.id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="You can only view availability slots for your own courses"
+        )
+    
+    status_filter = None
+    if status:
+        try:
+            status_filter = [AvailabilitySlotStatus(status)]
+        except ValueError:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Invalid status: {status}"
+            )
+    
+    # Get ALL slots for this course (no filtering by deadline or open status)
+    slots, total = await AvailabilityService.get_slots_for_course(
+        course_id=course_id,
+        session=session,
+        status_filter=status_filter,
+        page=page,
+        per_page=per_page,
+        only_bookable=False,
+        include_all_statuses=True  # New parameter to show all statuses
+    )
+    
+    total_pages = math.ceil(total / per_page) if total > 0 else 1
+    
+    return AvailabilityListResponse(
+        slots=[
+            AvailabilityListOut(
+                id=slot.id,
+                course_id=slot.course_id,
+                start_date=slot.start_date,
+                end_date=slot.end_date,
+                schedule=slot.schedule,
+                max_seats=slot.max_seats,
+                min_seats=slot.min_seats,
+                reserved_seats=slot.reserved_seats,
+                remaining_seats=slot.max_seats - slot.reserved_seats,
+                booking_deadline=slot.booking_deadline,
+                status=slot.status.value if hasattr(slot.status, 'value') else slot.status
+            )
+            for slot in slots
+        ],
+        total=total,
+        page=page,
+        per_page=per_page,
+        total_pages=total_pages
+    )
+
+
 @availability_router.post("", response_model=AvailabilityOut, status_code=status.HTTP_201_CREATED)
 async def create_availability_slot(
     slot_data: AvailabilityCreate,
@@ -356,10 +430,10 @@ async def confirm_availability_slot(
         # If deadline passed but not today, allow (admin override for late decisions)
     
     if status_data.status == "confirmed":
-        updated_slot, affected = await AvailabilityService.confirm_slot(
+        updated_slot, affected, enrollment_codes = await AvailabilityService.confirm_slot(
             slot, session, status_data.staff_notes
         )
-        message = f"Session confirmed. {affected} booking(s) have been confirmed."
+        message = f"Session confirmed. {affected} booking(s) have been confirmed. {len(enrollment_codes)} enrollment code(s) generated and sent."
     else:  # cancelled
         updated_slot, affected = await AvailabilityService.cancel_slot(
             slot, session, status_data.staff_notes

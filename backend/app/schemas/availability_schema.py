@@ -2,12 +2,16 @@
 Schemas for course availability slots.
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, Literal
 from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 
 AvailabilityStatus = Literal["open", "pending_review", "confirmed", "cancelled"]
+
+# Business rule constants
+MIN_START_DATE_DAYS = 3  # Session cannot start earlier than today + 3 days
+MIN_BOOKING_DEADLINE_DAYS = 2  # Booking deadline cannot be earlier than today + 2 days
 
 
 class AvailabilityBase(BaseModel):
@@ -27,13 +31,16 @@ class AvailabilityCreate(AvailabilityBase):
     @model_validator(mode='after')
     def validate_dates(self):
         """
-        Validate availability dates:
-        - start_date cannot be in the past
-        - end_date must be after start_date
-        - booking_deadline must be before start_date
-        - min_seats cannot exceed max_seats
+        Validate availability dates with STRICT business rules:
+        
+        Rule 1: Session start date >= today + 3 days
+        Rule 2: Booking deadline >= today + 2 days
+        Rule 3: Booking deadline < start_date (strictly before)
+        Rule 4: end_date > start_date
+        Rule 5: min_seats <= max_seats
         """
         now = datetime.now(timezone.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
         
         # Make dates timezone-aware if they aren't
         start = self.start_date
@@ -47,22 +54,35 @@ class AvailabilityCreate(AvailabilityBase):
         if deadline.tzinfo is None:
             deadline = deadline.replace(tzinfo=timezone.utc)
         
-        # Validate start_date is not in the past (allow today)
-        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
-        if start < today_start:
-            raise ValueError("Start date cannot be in the past")
+        # Rule 1: Session start date >= today + 3 days
+        min_start_date = today_start + timedelta(days=MIN_START_DATE_DAYS)
+        if start < min_start_date:
+            raise ValueError(
+                f"La date de début doit être au moins {MIN_START_DATE_DAYS} jours dans le futur "
+                f"(minimum: {min_start_date.strftime('%d/%m/%Y')})"
+            )
         
-        # Validate end_date is after start_date
-        if end <= start:
-            raise ValueError("End date must be after start date")
+        # Rule 2: Booking deadline >= today + 2 days
+        min_deadline = today_start + timedelta(days=MIN_BOOKING_DEADLINE_DAYS)
+        if deadline < min_deadline:
+            raise ValueError(
+                f"La date limite de réservation doit être au moins {MIN_BOOKING_DEADLINE_DAYS} jours dans le futur "
+                f"(minimum: {min_deadline.strftime('%d/%m/%Y')})"
+            )
         
-        # Validate booking_deadline is before start_date
+        # Rule 3: Booking deadline must be STRICTLY before start_date
         if deadline >= start:
-            raise ValueError("Booking deadline must be before the start date")
+            raise ValueError(
+                "La date limite de réservation doit être strictement avant la date de début de session"
+            )
         
-        # Validate min_seats <= max_seats
+        # Rule 4: end_date must be after start_date
+        if end <= start:
+            raise ValueError("La date de fin doit être après la date de début")
+        
+        # Rule 5: min_seats <= max_seats
         if self.min_seats > self.max_seats:
-            raise ValueError("Minimum seats cannot exceed maximum seats")
+            raise ValueError("Le nombre minimum de places ne peut pas dépasser le maximum")
         
         return self
 
@@ -78,7 +98,42 @@ class AvailabilityUpdate(BaseModel):
     
     @model_validator(mode='after')
     def validate_dates(self):
-        """Validate dates if provided together"""
+        """
+        Validate dates if provided - same strict rules as creation.
+        Note: Additional checks (bookings exist, deadline passed) are done in the service layer.
+        """
+        now = datetime.now(timezone.utc)
+        today_start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        
+        # Validate start_date if provided
+        if self.start_date:
+            start = self.start_date
+            if start.tzinfo is None:
+                start = start.replace(tzinfo=timezone.utc)
+            
+            # Rule 1: start_date >= today + 3 days
+            min_start_date = today_start + timedelta(days=MIN_START_DATE_DAYS)
+            if start < min_start_date:
+                raise ValueError(
+                    f"La date de début doit être au moins {MIN_START_DATE_DAYS} jours dans le futur "
+                    f"(minimum: {min_start_date.strftime('%d/%m/%Y')})"
+                )
+        
+        # Validate booking_deadline if provided
+        if self.booking_deadline:
+            deadline = self.booking_deadline
+            if deadline.tzinfo is None:
+                deadline = deadline.replace(tzinfo=timezone.utc)
+            
+            # Rule 2: booking_deadline >= today + 2 days
+            min_deadline = today_start + timedelta(days=MIN_BOOKING_DEADLINE_DAYS)
+            if deadline < min_deadline:
+                raise ValueError(
+                    f"La date limite de réservation doit être au moins {MIN_BOOKING_DEADLINE_DAYS} jours dans le futur "
+                    f"(minimum: {min_deadline.strftime('%d/%m/%Y')})"
+                )
+        
+        # Validate end_date > start_date if both provided
         if self.start_date and self.end_date:
             start = self.start_date
             end = self.end_date
@@ -89,8 +144,9 @@ class AvailabilityUpdate(BaseModel):
                 end = end.replace(tzinfo=timezone.utc)
             
             if end <= start:
-                raise ValueError("End date must be after start date")
+                raise ValueError("La date de fin doit être après la date de début")
         
+        # Validate deadline < start_date if both provided
         if self.booking_deadline and self.start_date:
             deadline = self.booking_deadline
             start = self.start_date

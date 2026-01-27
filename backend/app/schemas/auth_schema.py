@@ -57,7 +57,7 @@ class SignupRequest(BaseModel):
     NOTE: Staff role is NOT allowed for public signup.
     Staff accounts must be created by admin only.
     """
-    role: Literal["company", "professor"]  # Staff excluded from public signup
+    role: Literal["company", "professor", "employee"]  # Staff excluded from public signup
     
     # Common fields
     email: EmailStr

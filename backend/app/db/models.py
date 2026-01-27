@@ -51,6 +51,13 @@ class BookingStatus(str, Enum):
     CANCELLED = "cancelled"          # Booking cancelled (by company or due to session cancellation)
 
 
+class DocumentStatus(str, Enum):
+    """Status of an employee identity document"""
+    PENDING_REVIEW = "pending_review"
+    VERIFIED = "verified"
+    REJECTED = "rejected"
+
+
 class User(Base):
     __tablename__ = "users"
 
@@ -93,6 +100,14 @@ class User(Base):
 
     professor = relationship(
         "Professor",
+        back_populates="user",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+    # Employee profile for employee users
+    employee_profile = relationship(
+        "EmployeeProfile",
         back_populates="user",
         uselist=False,
         cascade="all, delete-orphan",
@@ -185,6 +200,31 @@ class Professor(Base):
     courses = relationship(
         "Course",
         back_populates="professor",
+    )
+
+
+class EmployeeProfile(Base):
+    """
+    Profile for employee users.
+    Employees are users who enroll in training sessions using codes from their company.
+    """
+    __tablename__ = "employee_profiles"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
+
+    user = relationship("User", back_populates="employee_profile")
+
+    # Session enrollments
+    session_enrollments = relationship(
+        "SessionEnrollment",
+        back_populates="employee",
+        cascade="all, delete-orphan",
     )
 
 
@@ -459,7 +499,166 @@ class TrainingRequest(Base):
     course = relationship("Course", back_populates="requests")
 
 
+class SessionEnrollmentCode(Base):
+    """
+    Enrollment code for a specific session, generated when staff confirms the session.
+    One code per company per session.
+    """
+    __tablename__ = "session_enrollment_codes"
+    __table_args__ = (
+        UniqueConstraint("availability_slot_id", "company_id", name="uq_session_company_code"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    code: Mapped[str] = mapped_column(unique=True, nullable=False, index=True)
+
+    availability_slot_id: Mapped[int] = mapped_column(
+        ForeignKey("course_availability.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    company_id: Mapped[int] = mapped_column(
+        ForeignKey("companies.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Linked booking
+    booking_id: Mapped[int] = mapped_column(
+        ForeignKey("company_bookings.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    max_usage: Mapped[int] = mapped_column(nullable=False)
+    used_count: Mapped[int] = mapped_column(server_default="0", nullable=False)
+
+    expires_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+
+    # Relationships
+    availability_slot = relationship("CourseAvailability", backref="enrollment_codes")
+    company = relationship("Company", backref="session_enrollment_codes")
+    booking = relationship("CompanyBooking", backref="enrollment_code")
+
+
+class SessionEnrollment(Base):
+    """
+    Employee enrollment for a specific session.
+    Created when an employee uses an enrollment code.
+    """
+    __tablename__ = "session_enrollments"
+    __table_args__ = (
+        UniqueConstraint("employee_id", "availability_slot_id", name="uq_employee_session_enrollment"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employee_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    availability_slot_id: Mapped[int] = mapped_column(
+        ForeignKey("course_availability.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    # Link to the company via enrollment code
+    enrollment_code_id: Mapped[int] = mapped_column(
+        ForeignKey("session_enrollment_codes.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+
+    enrolled_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+
+    # Relationships
+    employee = relationship("EmployeeProfile", back_populates="session_enrollments")
+    availability_slot = relationship("CourseAvailability", backref="session_enrollments")
+    enrollment_code = relationship("SessionEnrollmentCode", backref="enrollments")
+
+    # Document
+    document = relationship(
+        "EmployeeDocument",
+        back_populates="enrollment",
+        uselist=False,
+        cascade="all, delete-orphan",
+    )
+
+
+class EmployeeDocument(Base):
+    """
+    Identity document uploaded by an employee for a specific enrollment.
+    Required for attendance verification.
+    """
+    __tablename__ = "employee_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    enrollment_id: Mapped[int] = mapped_column(
+        ForeignKey("session_enrollments.id", ondelete="CASCADE"),
+        unique=True,
+        nullable=False,
+    )
+
+    # Document info
+    document_type: Mapped[str] = mapped_column(nullable=False)  # 'cin' or 'passport'
+    file_path: Mapped[str] = mapped_column(nullable=False)
+    original_filename: Mapped[str] = mapped_column(nullable=False)
+
+    # Review status
+    status: Mapped[DocumentStatus] = mapped_column(
+        SQLEnum(
+            DocumentStatus,
+            name="document_status",
+            validate_strings=True,
+            create_constraint=True,
+            values_callable=lambda obj: [e.value for e in obj]
+        ),
+        nullable=False,
+        server_default=DocumentStatus.PENDING_REVIEW.value,
+    )
+
+    # Staff review info
+    reviewed_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    rejection_reason: Mapped[Optional[str]] = mapped_column(nullable=True)
+
+    uploaded_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+
+    # Relationships
+    enrollment = relationship("SessionEnrollment", back_populates="document")
+    reviewed_by = relationship("User", backref="reviewed_documents")
+
+
+# Keep legacy EnrollmentCode for backwards compatibility but mark as deprecated
 class EnrollmentCode(Base):
+    """DEPRECATED: Use SessionEnrollmentCode instead"""
     __tablename__ = "enrollment_codes"
 
     id: Mapped[int] = mapped_column(primary_key=True)

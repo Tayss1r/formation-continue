@@ -22,8 +22,10 @@ from ..error import (
     SlotHasBookings,
     InvalidSlotStatus,
     CourseNotFound,
-    OverlappingSessionDates
+    OverlappingSessionDates,
+    DeadlinePassed
 )
+from .enrollment_service import EnrollmentService
 
 
 class AvailabilityService:
@@ -102,7 +104,8 @@ class AvailabilityService:
         status_filter: Optional[List[AvailabilitySlotStatus]] = None,
         page: int = 1,
         per_page: int = 20,
-        only_bookable: bool = False
+        only_bookable: bool = False,
+        include_all_statuses: bool = False
     ) -> Tuple[List[CourseAvailability], int]:
         """
         Get availability slots for a course.
@@ -113,7 +116,9 @@ class AvailabilityService:
             status_filter: Filter by status(es)
             page: Page number
             per_page: Items per page
-            only_bookable: If True, only return slots that are open and deadline not passed
+            only_bookable: If True, only return slots that are open and deadline not passed.
+                          If False, returns all open slots regardless of deadline (for display purposes).
+            include_all_statuses: If True, returns ALL slots regardless of status (for staff view).
         """
         query = select(CourseAvailability).where(
             CourseAvailability.course_id == course_id
@@ -121,14 +126,22 @@ class AvailabilityService:
         
         if status_filter:
             query = query.where(CourseAvailability.status.in_(status_filter))
-        
-        if only_bookable:
+        elif include_all_statuses:
+            # Staff view: show ALL slots regardless of status or deadline
+            pass  # No additional filtering
+        elif only_bookable:
+            # Only bookable: open status AND future deadline
             now = datetime.now(timezone.utc)
             query = query.where(
                 and_(
                     CourseAvailability.status == AvailabilitySlotStatus.OPEN,
                     CourseAvailability.booking_deadline > now
                 )
+            )
+        else:
+            # Not only_bookable: show all open slots (for display, even if deadline passed)
+            query = query.where(
+                CourseAvailability.status == AvailabilitySlotStatus.OPEN
             )
         
         # Count total
@@ -232,7 +245,10 @@ class AvailabilityService:
     ) -> CourseAvailability:
         """
         Update an availability slot.
-        Cannot modify if slot has bookings (except staff_notes).
+        Cannot modify dates if:
+        - Slot has bookings
+        - Deadline has passed
+        - Slot is not in OPEN status
         """
         # Check if slot has bookings
         if slot.reserved_seats > 0:
@@ -241,6 +257,16 @@ class AvailabilityService:
         # Check if slot is still in a modifiable state
         if slot.status not in [AvailabilitySlotStatus.OPEN]:
             raise InvalidSlotStatus()
+        
+        # Check if deadline has passed - cannot edit dates after deadline
+        now = datetime.now(timezone.utc)
+        if slot.booking_deadline.tzinfo is None:
+            deadline = slot.booking_deadline.replace(tzinfo=timezone.utc)
+        else:
+            deadline = slot.booking_deadline
+            
+        if now >= deadline:
+            raise DeadlinePassed()
         
         # Check for overlapping sessions if dates are being updated
         update_dict = update_data.model_dump(exclude_unset=True)
@@ -288,11 +314,19 @@ class AvailabilityService:
         slot: CourseAvailability,
         session: AsyncSession,
         staff_notes: Optional[str] = None
-    ) -> Tuple[CourseAvailability, int]:
+    ) -> Tuple[CourseAvailability, int, List]:
         """
         Confirm a slot - staff decision to run the session.
         Updates all reservations to confirmed.
+        Generates enrollment codes for each company and sends notification emails.
+        
+        Returns:
+            Tuple of (slot, number of bookings confirmed, list of enrollment codes)
         """
+        from ..celery_tasks import send_email
+        from ..core.config import settings
+        from ..db.models import Company, User
+        
         if slot.status != AvailabilitySlotStatus.PENDING_REVIEW:
             # Allow confirming from OPEN status too (early confirmation)
             if slot.status != AvailabilitySlotStatus.OPEN:
@@ -301,12 +335,14 @@ class AvailabilityService:
         # Update slot status
         slot.status = AvailabilitySlotStatus.CONFIRMED
         
-        # Update all bookings to confirmed
+        # Get all bookings with company AND company.user info for email sending
         booking_query = select(CompanyBooking).where(
             and_(
                 CompanyBooking.availability_slot_id == slot.id,
                 CompanyBooking.status == BookingStatus.RESERVED
             )
+        ).options(
+            selectinload(CompanyBooking.company).selectinload(Company.user)
         )
         result = await session.execute(booking_query)
         bookings = list(result.scalars().all())
@@ -316,10 +352,82 @@ class AvailabilityService:
             if staff_notes:
                 booking.staff_notes = staff_notes
         
+        await session.flush()
+        
+        # Generate enrollment codes for each company
+        enrollment_codes = await EnrollmentService.generate_codes_for_session(
+            slot=slot,
+            bookings=bookings,
+            session=session
+        )
+        
+        # Extract email data BEFORE commit (while session is still active)
+        # This avoids lazy loading issues after commit
+        course_title = slot.course.title if slot.course else "Formation"
+        slot_start_date = slot.start_date.strftime('%d/%m/%Y')
+        slot_end_date = slot.end_date.strftime('%d/%m/%Y')
+        slot_schedule = slot.schedule or 'À confirmer'
+        
+        email_data_list = []
+        for code_obj in enrollment_codes:
+            company = next(
+                (b.company for b in bookings if b.company_id == code_obj.company_id),
+                None
+            )
+            if company and company.user and company.user.email:
+                employee_count = next(
+                    (b.employee_count for b in bookings if b.company_id == code_obj.company_id),
+                    0
+                )
+                email_data_list.append({
+                    'email': company.user.email,
+                    'code': code_obj.code,
+                    'employee_count': employee_count
+                })
+        
         await session.commit()
         await session.refresh(slot)
         
-        return slot, len(bookings)
+        # Send enrollment code emails to companies AFTER commit
+        for email_data in email_data_list:
+            email_body = f"""
+            <html>
+            <body style="font-family: Arial, sans-serif;">
+            <h2>Session de formation confirmée</h2>
+            <p>Bonjour,</p>
+            <p>Nous avons le plaisir de vous confirmer la session de formation suivante :</p>
+            <div style="background: #f5f5f5; padding: 15px; border-radius: 5px; margin: 20px 0;">
+                <p><strong>Formation :</strong> {course_title}</p>
+                <p><strong>Début :</strong> {slot_start_date}</p>
+                <p><strong>Fin :</strong> {slot_end_date}</p>
+                <p><strong>Horaires :</strong> {slot_schedule}</p>
+                <p><strong>Nombre de places réservées :</strong> {email_data['employee_count']}</p>
+            </div>
+            <h3>Code d'inscription pour vos employés</h3>
+            <p>Voici le code d'inscription à communiquer à vos employés :</p>
+            <div style="background: #007bff; color: white; padding: 20px; text-align: center; font-size: 24px; letter-spacing: 3px; border-radius: 5px; margin: 20px 0;">
+                <strong>{email_data['code']}</strong>
+            </div>
+            <p><strong>Important :</strong></p>
+            <ul>
+                <li>Chaque employé doit créer un compte sur notre plateforme</li>
+                <li>Ils devront saisir ce code pour s'inscrire à la session</li>
+                <li>Ils devront télécharger une pièce d'identité pour validation</li>
+                <li>Le code est valide jusqu'au début de la formation</li>
+            </ul>
+            <p>Lien vers la plateforme : <a href="{settings.FRONTEND_URL}/employee/enroll">{settings.FRONTEND_URL}/employee/enroll</a></p>
+            <p>Cordialement,<br>L'équipe Formation Continue</p>
+            </body>
+            </html>
+            """
+            
+            send_email.delay(
+                recipients=[email_data['email']],
+                subject=f"Formation confirmée - Code d'inscription pour {course_title}",
+                body=email_body
+            )
+        
+        return slot, len(bookings), enrollment_codes
     
     @staticmethod
     async def cancel_slot(

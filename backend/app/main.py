@@ -8,6 +8,7 @@ from .api.courses import course_router
 from .api.newsletter import newsletter_router
 from .api.availability import availability_router
 from .api.booking import booking_router
+from .api.enrollment import enrollment_router
 from .middleware import register_middleware
 
 from .error import register_all_errors
@@ -58,3 +59,4 @@ app.include_router(course_router, prefix=f"/api/{API_VERSION}/courses", tags=['C
 app.include_router(newsletter_router, prefix=f"/api/{API_VERSION}/newsletter", tags=['Newsletter'])
 app.include_router(availability_router, prefix=f"/api/{API_VERSION}/availability", tags=['Availability'])
 app.include_router(booking_router, prefix=f"/api/{API_VERSION}/bookings", tags=['Bookings'])
+app.include_router(enrollment_router, prefix=f"/api/{API_VERSION}/enrollment", tags=['Enrollment'])

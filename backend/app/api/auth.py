@@ -170,6 +170,11 @@ async def signup(signup_data: SignupRequest, session: AsyncSession = Depends(get
             professor_data = signup_data.get_professor_data()
             new_user = await UserService.create_professor_user(user_data, professor_data, session)
             
+        elif signup_data.role == "employee":
+            # Employee signup - simple user with employee profile
+            user_data = signup_data.get_user_data()
+            new_user = await UserService.create_employee_user(user_data, session)
+            
         else:
             # This should not happen since staff is blocked above
             raise HTTPException(

@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..db.models import User, Company, Professor, UserRole
+from ..db.models import User, Company, Professor, EmployeeProfile, UserRole
 from ..utils import hash
 
 
@@ -168,6 +168,42 @@ class UserService:
         )
         
         session.add(new_professor)
+        await session.commit()
+        await session.refresh(new_user)
+        
+        # Load relationships
+        return await UserService.get_user_by_id(new_user.id, session)
+
+    @staticmethod
+    async def create_employee_user(user_data: dict, session: AsyncSession) -> User:
+        """Create an employee user with associated EmployeeProfile record"""
+        hashed_password = hash(user_data["password"])
+        
+        # Generate username from fullname if not provided
+        username = user_data.get("username")
+        if not username:
+            username = await UserService.generate_unique_username(user_data["fullname"], session)
+        
+        # Create the user
+        new_user = User(
+            username=username,
+            email=user_data["email"],
+            password=hashed_password,
+            fullname=user_data["fullname"],
+            phone=user_data.get("phone"),
+            role=UserRole.EMPLOYEE,
+            is_verified=False
+        )
+        
+        session.add(new_user)
+        await session.flush()  # Get the user ID without committing
+        
+        # Create the employee profile
+        new_employee = EmployeeProfile(
+            user_id=new_user.id,
+        )
+        
+        session.add(new_employee)
         await session.commit()
         await session.refresh(new_user)
         

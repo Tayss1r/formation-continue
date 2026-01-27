@@ -165,6 +165,11 @@ class DeadlineNotReached(CustomException):
     pass
 
 
+class DeadlinePassed(CustomException):
+    """Cannot edit session dates after the booking deadline has passed"""
+    pass
+
+
 class CourseHasBookings(CustomException):
     """Cannot modify course price/seats because there are existing bookings"""
     pass
@@ -172,6 +177,38 @@ class CourseHasBookings(CustomException):
 
 class OverlappingSessionDates(CustomException):
     """Cannot create session with dates that overlap an existing session for the same course"""
+    pass
+
+
+# ==================== Enrollment Errors ====================
+
+class InvalidEnrollmentCode(CustomException):
+    """The provided enrollment code is invalid"""
+    pass
+
+
+class EnrollmentCodeExpired(CustomException):
+    """The enrollment code has expired"""
+    pass
+
+
+class EnrollmentCodeMaxUsage(CustomException):
+    """The enrollment code has reached its maximum usage"""
+    pass
+
+
+class AlreadyEnrolled(CustomException):
+    """Employee is already enrolled in this session"""
+    pass
+
+
+class EnrollmentNotFound(CustomException):
+    """Enrollment not found"""
+    pass
+
+
+class DocumentNotFound(CustomException):
+    """Document not found"""
     pass
 
 
@@ -522,6 +559,17 @@ def register_all_errors(app: FastAPI):
     )
 
     app.add_exception_handler(
+        DeadlinePassed,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "Impossible de modifier les dates d'une session après la date limite de réservation",
+                "error_code": "deadline_passed",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
         CourseHasBookings,
         create_exception_handler(
             status_code=status.HTTP_400_BAD_REQUEST,
@@ -539,6 +587,74 @@ def register_all_errors(app: FastAPI):
             initial_detail={
                 "message": "Les dates de cette session chevauchent une session existante pour ce cours",
                 "error_code": "overlapping_session_dates",
+            },
+        ),
+    )
+
+    # ==================== Enrollment Error Handlers ====================
+
+    app.add_exception_handler(
+        InvalidEnrollmentCode,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "Code d'inscription invalide",
+                "error_code": "invalid_enrollment_code",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        EnrollmentCodeExpired,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "Ce code d'inscription a expiré",
+                "error_code": "enrollment_code_expired",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        EnrollmentCodeMaxUsage,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "Ce code a atteint son nombre maximum d'utilisations",
+                "error_code": "enrollment_code_max_usage",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        AlreadyEnrolled,
+        create_exception_handler(
+            status_code=status.HTTP_409_CONFLICT,
+            initial_detail={
+                "message": "Vous êtes déjà inscrit à cette session",
+                "error_code": "already_enrolled",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        EnrollmentNotFound,
+        create_exception_handler(
+            status_code=status.HTTP_404_NOT_FOUND,
+            initial_detail={
+                "message": "Inscription non trouvée",
+                "error_code": "enrollment_not_found",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        DocumentNotFound,
+        create_exception_handler(
+            status_code=status.HTTP_404_NOT_FOUND,
+            initial_detail={
+                "message": "Document non trouvé",
+                "error_code": "document_not_found",
             },
         ),
     )
