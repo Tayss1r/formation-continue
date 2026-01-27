@@ -59,11 +59,12 @@ export default function CourseDetailsPage() {
       try {
         setSlotsLoading(true);
         // Use authenticated endpoint if user is logged in and is a company
+        // Set onlyBookable to TRUE: companies only see sessions with valid deadlines
         if (isAuthenticated && user?.role === "company") {
           const response = await getCourseAvailabilityWithBookingStatus(courseId, 1, 50, true);
           setAvailabilitySlots(response.slots);
         } else {
-          // Use public endpoint
+          // Use public endpoint - only show bookable sessions
           const response = await getCourseAvailability(courseId, 1, 50, true);
           setAvailabilitySlots(response.slots);
         }

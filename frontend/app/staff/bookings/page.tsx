@@ -246,7 +246,7 @@ export default function StaffBookingsPage() {
           <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400 shrink-0 mt-0.5" />
           <div>
             <p className="text-sm text-blue-800 dark:text-blue-300">
-              <strong>Nouveau système de réservation :</strong> Les formations n&apos;ont plus de dates fixes.
+              <strong>Remarque :</strong> Les formations n&apos;ont pas de dates fixes.
               Vous définissez des créneaux de disponibilité, et les entreprises réservent des places sur ces créneaux.
               Une fois le délai de réservation passé, vous confirmez ou annulez la session.
             </p>

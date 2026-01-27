@@ -32,6 +32,8 @@ export default function LoginPage() {
         router.push("/courses");
       } else if (user?.role === "professor") {
         router.push("/dashboard");
+      } else if (user?.role === "employee") {
+        router.push("/employee/dashboard");
       } else {
         router.push("/");
       }

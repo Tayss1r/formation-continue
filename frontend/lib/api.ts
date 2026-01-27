@@ -32,7 +32,7 @@ export interface SignupData {
   password: string;
   first_name: string;
   last_name: string;
-  role: "staff" | "company" | "professor";
+  role: "staff" | "company" | "professor" | "employee";
   // Company fields
   company_name?: string;
   company_sector?: string;

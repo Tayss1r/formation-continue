@@ -87,6 +87,45 @@ export async function getCourseAvailability(
 }
 
 /**
+ * Get ALL availability slots for a course (staff only)
+ * Returns all slots regardless of status or deadline
+ */
+export async function getStaffCourseAvailability(
+  courseId: number,
+  page: number = 1,
+  perPage: number = 20,
+  statusFilter?: string
+): Promise<AvailabilityListResponse> {
+  const token = getAccessToken();
+  if (!token) throw new Error("Authentication required");
+
+  const params = new URLSearchParams({
+    page: page.toString(),
+    per_page: perPage.toString(),
+  });
+  
+  if (statusFilter) {
+    params.append("status", statusFilter);
+  }
+
+  const response = await fetch(
+    `${AVAILABILITY_API}/staff/course/${courseId}?${params}`,
+    {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    }
+  );
+
+  if (!response.ok) {
+    const error = await response.json();
+    throw new Error(extractErrorMessage(error, "Failed to fetch availability"));
+  }
+
+  return response.json();
+}
+
+/**
  * Get details of a specific availability slot (public)
  */
 export async function getAvailabilitySlot(

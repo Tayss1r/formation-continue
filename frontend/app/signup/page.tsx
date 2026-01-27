@@ -20,11 +20,12 @@ import {
   Briefcase,
   FileText,
   BookOpen,
+  Users,
 } from "lucide-react";
 import AuthLayout from "@/components/auth/AuthLayout";
 import { apiClient } from "@/lib/api";
 
-type UserRole = "company" | "professor";
+type UserRole = "company" | "professor" | "employee";
 
 interface SignupData {
   role: UserRole;
@@ -71,6 +72,13 @@ const roleOptions = [
     description: "Rejoignez notre équipe de formateurs",
     icon: GraduationCap,
     color: "from-purple-500 to-pink-500",
+  },
+  {
+    value: "employee" as UserRole,
+    label: "Employé",
+    description: "Inscrivez-vous pour participer aux formations de votre entreprise",
+    icon: Users,
+    color: "from-blue-500 to-cyan-500",
   },
 ];
 
@@ -293,10 +301,20 @@ export default function SignupPage() {
             Retour au choix du rôle
           </button>
 
+          {/* Employee info message */}
+          {data.role === "employee" && (
+            <div className="p-4 bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
+              <p className="text-sm text-blue-700 dark:text-blue-300">
+                <strong>Note :</strong> Après votre inscription, vous pourrez utiliser le code d&apos;inscription 
+                fourni par votre entreprise pour vous inscrire aux formations.
+              </p>
+            </div>
+          )}
+
           {/* Common Fields */}
           <div className="grid grid-cols-1 gap-4">
-            {/* Username (Staff & Professor) */}
-            {(data.role === "staff" || data.role === "professor") && (
+            {/* Username (Professor only) */}
+            {data.role === "professor" && (
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
                   Nom d&apos;utilisateur *

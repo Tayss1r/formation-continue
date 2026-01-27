@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { getCourseDetails } from "@/lib/courses";
 import {
-  getCourseAvailability,
+  getStaffCourseAvailability,
   createAvailabilitySlot,
   updateAvailabilitySlot,
   deleteAvailabilitySlot,
@@ -56,13 +56,76 @@ export default function CourseAvailabilityPage() {
   const [minSeats, setMinSeats] = useState<number | "">("");
   const [bookingDeadline, setBookingDeadline] = useState("");
 
+  // Business rule constants
+  const MIN_START_DATE_DAYS = 3;
+  const MIN_BOOKING_DEADLINE_DAYS = 2;
+
+  // Calculate minimum dates based on business rules
+  const getMinStartDate = () => {
+    const date = new Date();
+    date.setDate(date.getDate() + MIN_START_DATE_DAYS);
+    return date.toISOString().split("T")[0];
+  };
+
+  const getMinBookingDeadline = () => {
+    const date = new Date();
+    date.setDate(date.getDate() + MIN_BOOKING_DEADLINE_DAYS);
+    return date.toISOString().split("T")[0];
+  };
+
+  // Calculate max booking deadline (must be before start date)
+  const getMaxBookingDeadline = () => {
+    if (!startDate) return undefined;
+    const date = new Date(startDate);
+    date.setDate(date.getDate() - 1);
+    return date.toISOString().split("T")[0];
+  };
+
+  // Validation errors for form fields
+  const getStartDateError = () => {
+    if (!startDate) return null;
+    const selected = new Date(startDate);
+    const minDate = new Date(getMinStartDate());
+    minDate.setHours(0, 0, 0, 0);
+    selected.setHours(0, 0, 0, 0);
+    if (selected < minDate) {
+      return `La date de début doit être au moins ${MIN_START_DATE_DAYS} jours dans le futur`;
+    }
+    return null;
+  };
+
+  const getBookingDeadlineError = () => {
+    if (!bookingDeadline) return null;
+    const selected = new Date(bookingDeadline);
+    const minDate = new Date(getMinBookingDeadline());
+    minDate.setHours(0, 0, 0, 0);
+    selected.setHours(0, 0, 0, 0);
+    
+    if (selected < minDate) {
+      return `La date limite doit être au moins ${MIN_BOOKING_DEADLINE_DAYS} jours dans le futur`;
+    }
+    
+    if (startDate) {
+      const startDateObj = new Date(startDate);
+      startDateObj.setHours(0, 0, 0, 0);
+      if (selected >= startDateObj) {
+        return "La date limite doit être strictement avant la date de début";
+      }
+    }
+    return null;
+  };
+
+  const isFormValid = () => {
+    return !getStartDateError() && !getBookingDeadlineError() && startDate && endDate && bookingDeadline;
+  };
+
   useEffect(() => {
     async function fetchData() {
       try {
         setLoading(true);
         const [courseData, availabilityData] = await Promise.all([
           getCourseDetails(courseId),
-          getCourseAvailability(courseId, 1, 50, false), // Include all statuses for staff
+          getStaffCourseAvailability(courseId, 1, 50), // Staff endpoint: shows ALL slots
         ]);
         setCourse(courseData);
         setSlots(availabilityData.slots);
@@ -323,6 +386,16 @@ export default function CourseAvailabilityPage() {
               </h2>
 
               <form onSubmit={handleSubmit} className="space-y-4">
+                {/* Business Rules Info Box */}
+                <div className="p-3 bg-blue-50 dark:bg-blue-500/10 rounded-xl text-blue-700 dark:text-blue-400 text-sm">
+                  <p className="font-medium mb-1">📅 Règles de planification :</p>
+                  <ul className="list-disc list-inside space-y-1 text-xs">
+                    <li>Date de début : minimum <strong>{MIN_START_DATE_DAYS} jours</strong> à partir d&apos;aujourd&apos;hui</li>
+                    <li>Date limite de réservation : minimum <strong>{MIN_BOOKING_DEADLINE_DAYS} jours</strong> à partir d&apos;aujourd&apos;hui</li>
+                    <li>La date limite doit être <strong>strictement avant</strong> la date de début</li>
+                  </ul>
+                </div>
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -332,9 +405,20 @@ export default function CourseAvailabilityPage() {
                       type="date"
                       value={startDate}
                       onChange={(e) => setStartDate(e.target.value)}
+                      min={getMinStartDate()}
                       required
-                      className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                      className={`w-full px-4 py-2.5 rounded-xl border ${
+                        getStartDateError() 
+                          ? "border-red-500 bg-red-50 dark:bg-red-500/10" 
+                          : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                      } text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
                     />
+                    {getStartDateError() && (
+                      <p className="mt-1 text-xs text-red-500">{getStartDateError()}</p>
+                    )}
+                    <p className="mt-1 text-xs text-slate-500">
+                      Min: {new Date(getMinStartDate()).toLocaleDateString("fr-FR")}
+                    </p>
                   </div>
                   <div>
                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
@@ -344,6 +428,7 @@ export default function CourseAvailabilityPage() {
                       type="date"
                       value={endDate}
                       onChange={(e) => setEndDate(e.target.value)}
+                      min={startDate || getMinStartDate()}
                       required
                       className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                     />
@@ -403,9 +488,22 @@ export default function CourseAvailabilityPage() {
                     type="date"
                     value={bookingDeadline}
                     onChange={(e) => setBookingDeadline(e.target.value)}
+                    min={getMinBookingDeadline()}
+                    max={getMaxBookingDeadline()}
                     required
-                    className="w-full px-4 py-2.5 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                    className={`w-full px-4 py-2.5 rounded-xl border ${
+                      getBookingDeadlineError() 
+                        ? "border-red-500 bg-red-50 dark:bg-red-500/10" 
+                        : "border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700"
+                    } text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 focus:border-transparent`}
                   />
+                  {getBookingDeadlineError() && (
+                    <p className="mt-1 text-xs text-red-500">{getBookingDeadlineError()}</p>
+                  )}
+                  <p className="mt-1 text-xs text-slate-500">
+                    Min: {new Date(getMinBookingDeadline()).toLocaleDateString("fr-FR")}
+                    {startDate && ` • Max: ${new Date(getMaxBookingDeadline()!).toLocaleDateString("fr-FR")}`}
+                  </p>
                 </div>
 
                 {formError && (
@@ -427,8 +525,8 @@ export default function CourseAvailabilityPage() {
                   </button>
                   <button
                     type="submit"
-                    disabled={formLoading}
-                    className="flex-1 px-4 py-2.5 rounded-xl bg-purple-500 text-white font-medium hover:bg-purple-600 transition-colors disabled:opacity-50 flex items-center justify-center gap-2"
+                    disabled={formLoading || !isFormValid()}
+                    className="flex-1 px-4 py-2.5 rounded-xl bg-purple-500 text-white font-medium hover:bg-purple-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                   >
                     {formLoading ? (
                       <>
@@ -471,14 +569,27 @@ export default function CourseAvailabilityPage() {
         <div className="space-y-4">
           {slots.map((slot) => {
             const remainingSeats = slot.max_seats - slot.reserved_seats;
-            const isEditable = slot.status === "open" && slot.reserved_seats === 0;
             
             // Check if today is the deadline day or past
             const deadline = new Date(slot.booking_deadline);
             const today = new Date();
+            today.setHours(0, 0, 0, 0);
+            deadline.setHours(0, 0, 0, 0);
             const isDeadlineDay = deadline.toDateString() === today.toDateString();
             const isDeadlinePassed = today >= deadline;
             const canConfirmOrCancel = isDeadlineDay || isDeadlinePassed;
+            
+            // Session is editable only if: open, no bookings, and deadline not passed
+            const isEditable = slot.status === "open" && slot.reserved_seats === 0 && !isDeadlinePassed;
+            const editBlockedReason = !isEditable 
+              ? slot.reserved_seats > 0 
+                ? "Des réservations existent" 
+                : isDeadlinePassed 
+                  ? "Date limite dépassée" 
+                  : slot.status !== "open" 
+                    ? "Session non modifiable" 
+                    : null
+              : null;
 
             return (
               <div
@@ -493,6 +604,11 @@ export default function CourseAvailabilityPage() {
                         {formatDate(slot.start_date)} - {formatDate(slot.end_date)}
                       </span>
                       {getStatusBadge(slot.status)}
+                      {isDeadlinePassed && slot.status === "open" && (
+                        <span className="px-2 py-1 rounded-full text-xs font-medium bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400">
+                          Délai passé
+                        </span>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 text-sm">
@@ -541,18 +657,24 @@ export default function CourseAvailabilityPage() {
                     </Link>
 
                     {/* Edit - only for open slots with no bookings */}
-                    {isEditable && (
+                    {/* Edit button - disabled with reason when not editable */}
+                    {slot.status === "open" && (
                       <button
-                        onClick={() => openEditForm(slot)}
-                        className="p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400 transition-colors"
-                        title="Modifier"
+                        onClick={() => isEditable && openEditForm(slot)}
+                        disabled={!isEditable}
+                        className={`p-2 rounded-lg transition-colors ${
+                          isEditable
+                            ? "hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-400"
+                            : "text-slate-300 dark:text-slate-600 cursor-not-allowed"
+                        }`}
+                        title={editBlockedReason || "Modifier"}
                       >
                         <Edit className="w-5 h-5" />
                       </button>
                     )}
 
-                    {/* Delete - only for slots with no bookings */}
-                    {slot.reserved_seats === 0 && slot.status !== "confirmed" && (
+                    {/* Delete - only for slots with no bookings and deadline not passed */}
+                    {slot.reserved_seats === 0 && slot.status !== "confirmed" && !isDeadlinePassed && (
                       <button
                         onClick={() => handleDelete(slot.id)}
                         className="p-2 rounded-lg hover:bg-red-50 dark:hover:bg-red-500/10 text-red-500 transition-colors"

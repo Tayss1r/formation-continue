@@ -403,6 +403,15 @@ export default function StaffAvailabilityPage() {
                           Délai dépassé
                         </span>
                       )}
+                      {slot.status === "confirmed" && (
+                        <Link
+                          href={`/staff/sessions/${slot.id}/enrollees`}
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-blue-600 hover:text-blue-700 dark:text-blue-400 text-xs font-medium hover:underline"
+                        >
+                          Voir les participants →
+                        </Link>
+                      )}
                     </div>
                   </div>
                   <ChevronRight className="w-5 h-5 text-slate-400" />

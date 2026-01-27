@@ -63,6 +63,24 @@ export function Header() {
                     Tableau de bord
                   </Link>
                 )}
+                {user?.role === "employee" && (
+                  <Link
+                    href="/employee/dashboard"
+                    className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
+                  >
+                    <User className="w-4 h-4" />
+                    Mes inscriptions
+                  </Link>
+                )}
+                {user?.role === "company" && (
+                  <Link
+                    href="/dashboard"
+                    className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
+                  >
+                    <User className="w-4 h-4" />
+                    Mon espace
+                  </Link>
+                )}
                 <button
                   onClick={handleLogout}
                   className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-sm font-medium"
@@ -130,6 +148,26 @@ export function Header() {
                       >
                         <User className="w-4 h-4" />
                         Tableau de bord
+                      </Link>
+                    )}
+                    {user?.role === "employee" && (
+                      <Link
+                        href="/employee/dashboard"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
+                      >
+                        <User className="w-4 h-4" />
+                        Mes inscriptions
+                      </Link>
+                    )}
+                    {user?.role === "company" && (
+                      <Link
+                        href="/dashboard"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
+                      >
+                        <User className="w-4 h-4" />
+                        Mon espace
                       </Link>
                     )}
                     <button
