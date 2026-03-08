@@ -11,15 +11,15 @@ export default function NewCoursePage() {
       <div className="mb-8">
         <Link
           href="/staff"
-          className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-purple-500 dark:hover:text-purple-400 transition-colors mb-4"
+          className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary-500 transition-colors mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
           Retour au tableau de bord
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+        <h1 className="heading-display text-2xl">
           Créer une Nouvelle Formation
         </h1>
-        <p className="text-slate-600 dark:text-slate-400 mt-1">
+        <p className="text-muted-foreground mt-1">
           Remplissez les informations ci-dessous pour créer une nouvelle formation.
         </p>
       </div>

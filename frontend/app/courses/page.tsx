@@ -55,13 +55,13 @@ export default function CoursesPage() {
       <section className="pt-28 pb-12 px-4 sm:px-6 lg:px-8">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-12">
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500/10 border border-purple-500/20 mb-6">
-              <BookOpen className="w-4 h-4 text-purple-500" />
-              <span className="text-sm text-purple-500 font-medium">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary-500/10 border border-primary-500/20 mb-6">
+              <BookOpen className="w-4 h-4 text-primary-500" />
+              <span className="text-sm text-primary-500 font-medium">
                 Catalogue des Formations
               </span>
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">
+            <h1 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
               Nos <span className="gradient-text">Formations Professionnelles</span>
             </h1>
             <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
@@ -73,26 +73,26 @@ export default function CoursesPage() {
           <div className="flex flex-col sm:flex-row gap-4 justify-between items-center mb-8">
             {/* Search */}
             <div className="relative w-full sm:w-96">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
                 type="text"
                 placeholder="Rechercher une formation..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:border-purple-500 transition-colors"
+                className="form-input pl-12"
               />
             </div>
 
             {/* Type Filter */}
             <div className="flex items-center gap-2">
-              <Filter className="w-5 h-5 text-slate-400" />
+              <Filter className="w-5 h-5 text-muted-foreground" />
               <select
                 value={courseType || ""}
                 onChange={(e) => {
                   setCourseType(e.target.value || undefined);
                   setPage(1);
                 }}
-                className="px-4 py-3 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors"
+                className="form-input"
               >
                 <option value="">Toutes les formations</option>
                 <option value="public">Formations Publiques</option>
@@ -114,7 +114,7 @@ export default function CoursesPage() {
           {/* Loading State */}
           {isLoading && (
             <div className="flex justify-center items-center py-20">
-              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+              <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
             </div>
           )}
 
@@ -124,7 +124,7 @@ export default function CoursesPage() {
               <p className="text-red-500 mb-4">{error}</p>
               <button
                 onClick={() => window.location.reload()}
-                className="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+                className="btn-primary px-6 py-2"
               >
                 Réessayer
               </button>
@@ -134,11 +134,11 @@ export default function CoursesPage() {
           {/* Empty State */}
           {!isLoading && !error && filteredCourses.length === 0 && (
             <div className="text-center py-20">
-              <BookOpen className="w-16 h-16 mx-auto text-slate-400 mb-4" />
-              <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+              <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+              <h3 className="text-xl font-semibold text-foreground mb-2">
                 Aucune formation trouvée
               </h3>
-              <p className="text-slate-600 dark:text-slate-400">
+              <p className="text-muted-foreground">
                 {searchQuery
                   ? "Essayez avec d'autres mots-clés."
                   : "Revenez bientôt pour de nouvelles formations."}
@@ -186,8 +186,8 @@ export default function CoursesPage() {
                           onClick={() => setPage(pageNum)}
                           className={`w-10 h-10 rounded-lg font-medium transition-colors ${
                             page === pageNum
-                              ? "bg-purple-500 text-white"
-                              : "border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-white hover:bg-slate-100 dark:hover:bg-slate-800"
+                              ? "bg-primary-500 text-white"
+                              : "border border-border text-foreground hover:bg-muted"
                           }`}
                         >
                           {pageNum}

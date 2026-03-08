@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
-from ..db.models import User, Company, Professor, EmployeeProfile, UserRole
+from ..db.models import User, Company, Professor, EmployeeProfile, UserRole, AccountStatus
 from ..utils import hash
 
 
@@ -108,7 +108,7 @@ class UserService:
         """Create a company user with associated Company record"""
         hashed_password = hash(user_data["password"])
         
-        # Create the user
+        # Create the user with PENDING status (requires approval)
         new_user = User(
             username=user_data["username"],
             email=user_data["email"],
@@ -116,7 +116,9 @@ class UserService:
             fullname=user_data["fullname"],
             phone=user_data.get("phone"),
             role=UserRole.COMPANY,
-            is_verified=False
+            is_verified=False,
+            account_status=AccountStatus.PENDING,  # Requires staff approval
+            verification_document=user_data.get("verification_document")
         )
         
         session.add(new_user)
@@ -146,7 +148,7 @@ class UserService:
         """Create a professor user with associated Professor record"""
         hashed_password = hash(user_data["password"])
         
-        # Create the user
+        # Create the user with PENDING status (requires approval)
         new_user = User(
             username=user_data["username"],
             email=user_data["email"],
@@ -154,7 +156,9 @@ class UserService:
             fullname=user_data["fullname"],
             phone=user_data.get("phone"),
             role=UserRole.PROFESSOR,
-            is_verified=False
+            is_verified=False,
+            account_status=AccountStatus.PENDING,  # Requires staff approval
+            verification_document=user_data.get("verification_document")
         )
         
         session.add(new_user)

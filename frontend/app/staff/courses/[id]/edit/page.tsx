@@ -38,7 +38,7 @@ export default function EditCoursePage() {
   if (isLoading) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
-        <Loader2 className="w-8 h-8 text-purple-500 animate-spin" />
+        <Loader2 className="w-8 h-8 text-primary-500 animate-spin" />
       </div>
     );
   }
@@ -46,13 +46,13 @@ export default function EditCoursePage() {
   if (error || !course) {
     return (
       <div className="max-w-4xl mx-auto text-center py-20">
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
+        <h1 className="text-2xl font-bold text-foreground mb-4">
           Formation Introuvable
         </h1>
-        <p className="text-slate-600 dark:text-slate-400 mb-8">{error}</p>
+        <p className="text-muted-foreground mb-8">{error}</p>
         <Link
           href="/staff/courses"
-          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-purple-500 text-white font-medium hover:bg-purple-600 transition-colors"
+          className="btn-primary inline-flex items-center gap-2 px-6 py-3"
         >
           <ArrowLeft className="w-5 h-5" />
           Retour à mes formations
@@ -67,15 +67,15 @@ export default function EditCoursePage() {
       <div className="mb-8">
         <Link
           href="/staff/courses"
-          className="inline-flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-purple-500 dark:hover:text-purple-400 transition-colors mb-4"
+          className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary-500 transition-colors mb-4"
         >
           <ArrowLeft className="w-4 h-4" />
           Retour à mes formations
         </Link>
-        <h1 className="text-2xl font-bold text-slate-900 dark:text-white">
+        <h1 className="heading-display text-2xl">
           Modifier la Formation
         </h1>
-        <p className="text-slate-600 dark:text-slate-400 mt-1">
+        <p className="text-muted-foreground mt-1">
           Modifiez les informations de la formation &quot;{course.title}&quot;
         </p>
       </div>

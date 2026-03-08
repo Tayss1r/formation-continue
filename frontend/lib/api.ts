@@ -1,5 +1,8 @@
 import { API_BASE_URL } from "./config";
 
+// Re-export for convenience
+export { API_BASE_URL };
+
 // Types
 export interface ApiError {
   message: string;
@@ -150,13 +153,36 @@ class ApiClient {
     }
 
     if (!response.ok) {
-      const error: ApiError = await response.json().catch(() => ({
-        message: "An error occurred",
-      }));
+      const errorBody = await response.json().catch(() => ({}));
+      
+      // Build a proper ApiError with message
+      let message = "An error occurred";
+      
+      if (errorBody.message) {
+        message = errorBody.message;
+      } else if (errorBody.detail) {
+        // Handle FastAPI validation errors (422)
+        if (Array.isArray(errorBody.detail)) {
+          message = errorBody.detail
+            .map((d: { msg?: string; loc?: string[] }) => {
+              const field = d.loc ? d.loc[d.loc.length - 1] : '';
+              return field ? `${field}: ${d.msg}` : d.msg;
+            })
+            .filter(Boolean)
+            .join('; ');
+        } else if (typeof errorBody.detail === 'string') {
+          message = errorBody.detail;
+        }
+      }
+      
+      const error: ApiError = { message, ...errorBody };
       throw error;
     }
 
-    // Handle empty responses
+    // Handle empty responses (e.g. 204 No Content from DELETE)
+    if (response.status === 204 || response.headers.get("content-length") === "0") {
+      return {} as T;
+    }
     const contentType = response.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
       return response.json();

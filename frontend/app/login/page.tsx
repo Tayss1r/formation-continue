@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { Mail, Lock, Eye, EyeOff, Loader2, AlertCircle } from "lucide-react";
+import { Mail, Lock, Loader2, AlertCircle } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import AuthLayout from "@/components/auth/AuthLayout";
+import FormInput from "@/components/ui/FormInput";
 
 export default function LoginPage() {
   const router = useRouter();
@@ -13,7 +14,6 @@ export default function LoginPage() {
 
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
 
@@ -28,10 +28,12 @@ export default function LoginPage() {
       // Role-based redirect
       if (user?.role === "staff" || user?.role === "admin") {
         router.push("/staff");
+      } else if (user?.role === "coordinator") {
+        router.push("/coordinator");
       } else if (user?.role === "company") {
         router.push("/courses");
       } else if (user?.role === "professor") {
-        router.push("/dashboard");
+        router.push("/professor");
       } else if (user?.role === "employee") {
         router.push("/employee/dashboard");
       } else {
@@ -41,6 +43,13 @@ export default function LoginPage() {
       const error = err as { message?: string; error_code?: string };
       if (error.error_code === "account_not_verified") {
         setError("Votre compte n'est pas encore vérifié. Veuillez vérifier votre email.");
+      } else if (error.error_code === "account_pending") {
+        router.push(`/pending-approval?email=${encodeURIComponent(email)}`);
+        return;
+      } else if (error.error_code === "account_rejected") {
+        setError("Votre demande de compte a été rejetée. Contactez-nous pour plus d'informations.");
+      } else if (error.error_code === "account_blocked") {
+        setError("Votre compte a été bloqué. Contactez l'administration.");
       } else {
         setError(error.message || "Email ou mot de passe incorrect");
       }
@@ -74,65 +83,34 @@ export default function LoginPage() {
 
       <form onSubmit={handleSubmit} className="space-y-5">
         {/* Email */}
-        <div className="space-y-2">
-          <label
-            htmlFor="email"
-            className="block text-sm font-medium text-slate-700 dark:text-slate-300"
-          >
-            Email
-          </label>
-          <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all"
-              placeholder="votre@email.com"
-            />
-          </div>
-        </div>
+        <FormInput
+          id="email"
+          type="email"
+          label="Email"
+          icon={Mail}
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="votre@email.com"
+          required
+        />
 
         {/* Password */}
-        <div className="space-y-2">
-          <label
-            htmlFor="password"
-            className="block text-sm font-medium text-slate-700 dark:text-slate-300"
-          >
-            Mot de passe
-          </label>
-          <div className="relative">
-            <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <input
-              type={showPassword ? "text" : "password"}
-              id="password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              required
-              className="w-full pl-10 pr-12 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all"
-              placeholder="••••••••"
-            />
-            <button
-              type="button"
-              onClick={() => setShowPassword(!showPassword)}
-              className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-colors"
-            >
-              {showPassword ? (
-                <EyeOff className="w-5 h-5" />
-              ) : (
-                <Eye className="w-5 h-5" />
-              )}
-            </button>
-          </div>
-        </div>
+        <FormInput
+          id="password"
+          label="Mot de passe"
+          icon={Lock}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+          placeholder="••••••••"
+          showPasswordToggle
+          required
+        />
 
         {/* Forgot Password */}
         <div className="text-right">
           <Link
             href="/forgot-password"
-            className="text-sm text-purple-500 hover:text-purple-600 dark:hover:text-purple-400 transition-colors"
+            className="text-sm text-primary-600 hover:text-primary-700 dark:text-primary-400 dark:hover:text-primary-300 transition-colors"
           >
             Mot de passe oublié ?
           </Link>
@@ -142,7 +120,7 @@ export default function LoginPage() {
         <button
           type="submit"
           disabled={isLoading}
-          className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed disabled:active:scale-100 flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25"
+          className="btn-primary w-full h-12 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {isLoading ? (
             <>
@@ -158,10 +136,10 @@ export default function LoginPage() {
       {/* Divider */}
       <div className="relative my-8">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-slate-200 dark:border-slate-700"></div>
+          <div className="w-full border-t border-border"></div>
         </div>
         <div className="relative flex justify-center text-sm">
-          <span className="px-4 bg-white dark:bg-slate-800/50 text-slate-500 dark:text-slate-400">
+          <span className="px-4 bg-background text-muted-foreground">
             Pas encore de compte ?
           </span>
         </div>
@@ -170,7 +148,7 @@ export default function LoginPage() {
       {/* Sign Up Link */}
       <Link
         href="/signup"
-        className="block w-full py-3.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-center hover:border-purple-500 hover:text-purple-500 dark:hover:border-purple-500 dark:hover:text-purple-400 transition-all"
+        className="btn-secondary block w-full h-12 flex items-center justify-center text-center"
       >
         Créer un compte
       </Link>

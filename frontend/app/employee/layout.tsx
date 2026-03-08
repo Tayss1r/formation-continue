@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { EmployeeSidebar } from "@/components/employee/EmployeeSidebar";
+import { DashboardHeader } from "@/components/DashboardHeader";
 
 export default function EmployeeLayout({
   children,
@@ -31,8 +32,8 @@ export default function EmployeeLayout({
   // Show loading state
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-slate-50 dark:bg-[#020817] flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-600"></div>
       </div>
     );
   }
@@ -43,10 +44,11 @@ export default function EmployeeLayout({
   }
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-[#020817]">
+    <div className="min-h-screen bg-background transition-colors duration-300">
       <EmployeeSidebar />
       <div className="lg:pl-64">
-        <main className="p-6 lg:p-8">{children}</main>
+        <DashboardHeader settingsHref="/employee/settings" />
+        <main className="p-4 lg:p-8">{children}</main>
       </div>
     </div>
   );

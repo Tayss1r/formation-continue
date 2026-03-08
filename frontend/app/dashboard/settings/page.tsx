@@ -445,7 +445,7 @@ export default function SettingsPage() {
       case "admin":
         return {
           label: "Admin",
-          className: "bg-purple-100 dark:bg-purple-500/20 text-purple-700 dark:text-purple-300"
+          className: "bg-primary-100 dark:bg-primary-500/20 text-primary-700 dark:text-primary-300"
         };
       case "company":
         return {
@@ -460,7 +460,7 @@ export default function SettingsPage() {
       default:
         return {
           label: role,
-          className: "bg-slate-100 dark:bg-slate-500/20 text-slate-700 dark:text-slate-300"
+          className: "bg-muted text-muted-foreground"
         };
     }
   };
@@ -469,7 +469,7 @@ export default function SettingsPage() {
     return (
       <div className="max-w-4xl mx-auto">
         <div className="flex items-center justify-center py-20">
-          <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+          <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
         </div>
       </div>
     );
@@ -481,11 +481,11 @@ export default function SettingsPage() {
     <div className="max-w-4xl mx-auto">
       {/* Header */}
       <div className="mb-8">
-        <h1 className="text-2xl lg:text-3xl font-bold text-slate-900 dark:text-white mb-2">
-          Settings
+        <h1 className="heading-display text-2xl lg:text-3xl mb-2">
+          Paramètres
         </h1>
-        <p className="text-slate-600 dark:text-slate-400">
-          Manage your personal information and security preferences
+        <p className="text-muted-foreground">
+          Gérez vos informations personnelles et vos préférences de sécurité
         </p>
       </div>
 
@@ -505,18 +505,18 @@ export default function SettingsPage() {
 
       <div className="space-y-6">
         {/* Profile Information Section */}
-        <div className="bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-          <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+        <div className="card-elevated overflow-hidden">
+          <div className="p-6 border-b border-border">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <div className="icon-box w-10 h-10 gradient-primary">
                 <UserCircle className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
-                  Profile Information
+                <h2 className="text-lg font-semibold text-foreground">
+                  Informations du Profil
                 </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
-                  Update your personal details
+                <p className="text-sm text-muted-foreground">
+                  Mettez à jour vos informations personnelles
                 </p>
               </div>
             </div>
@@ -527,25 +527,25 @@ export default function SettingsPage() {
             <div>
               <label
                 htmlFor="fullname"
-                className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+                className="block text-sm font-medium text-muted-foreground mb-2"
               >
                 Full Name
               </label>
               <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <input
                   type="text"
                   id="fullname"
                   value={fullname}
                   onChange={(e) => setFullname(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                  className="form-input pl-12"
                   placeholder="Your full name"
                   minLength={4}
                   maxLength={20}
                   required
                 />
               </div>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Between 4 and 20 characters
               </p>
             </div>
@@ -554,12 +554,12 @@ export default function SettingsPage() {
             <div>
               <label
                 htmlFor="username"
-                className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+                className="block text-sm font-medium text-muted-foreground mb-2"
               >
                 Username
               </label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 font-medium">
+                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
                   @
                 </span>
                 <input
@@ -567,13 +567,13 @@ export default function SettingsPage() {
                   id="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                  className="form-input pl-10"
                   placeholder="username"
                   maxLength={10}
                   required
                 />
               </div>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <p className="mt-1 text-xs text-muted-foreground">
                 Maximum 10 characters
               </p>
             </div>
@@ -582,23 +582,23 @@ export default function SettingsPage() {
             <div>
               <label
                 htmlFor="email"
-                className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+                className="block text-sm font-medium text-muted-foreground mb-2"
               >
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <input
                   type="email"
                   id="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                  className="form-input pl-12"
                   placeholder="your@email.com"
                   required
                 />
               </div>
-              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+              <p className="mt-1 text-xs text-muted-foreground">
                 A verification email will be sent if you change this
               </p>
             </div>
@@ -607,36 +607,36 @@ export default function SettingsPage() {
             <div>
               <label
                 htmlFor="phone"
-                className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+                className="block text-sm font-medium text-muted-foreground mb-2"
               >
                 Phone{" "}
-                <span className="text-slate-400 font-normal">(optional)</span>
+                <span className="text-muted-foreground font-normal">(optional)</span>
               </label>
               <div className="relative">
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
                 <input
                   type="tel"
                   id="phone"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="w-full pl-12 pr-4 py-3 bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:ring-2 focus:ring-purple-500 focus:border-transparent transition-all"
+                  className="form-input pl-12"
                   placeholder="+33 6 12 34 56 78"
                 />
               </div>
             </div>
 
             {/* Account Status */}
-            <div className="flex items-center gap-3 p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+            <div className="flex items-center gap-3 p-4 bg-muted rounded-xl">
               <div
                 className={`w-3 h-3 rounded-full ${
                   profile?.is_verified ? "bg-green-500" : "bg-yellow-500"
                 }`}
               />
               <div>
-                <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                <p className="text-sm font-medium text-foreground">
                   Account Status
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-xs text-muted-foreground">
                   {profile?.is_verified
                     ? "Email verified"
                     : "Email not verified - Check your inbox"}
@@ -659,7 +659,7 @@ export default function SettingsPage() {
               <button
                 type="submit"
                 disabled={isSaving}
-                className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+                className="btn-primary inline-flex items-center gap-2 px-6 py-3"
               >
                 {isSaving ? (
                   <Loader2 className="w-5 h-5 animate-spin" />
@@ -673,17 +673,17 @@ export default function SettingsPage() {
         </div>
 
         {/* Security Section */}
-        <div className="bg-white dark:bg-slate-900/50 rounded-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
-          <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+        <div className="card-elevated overflow-hidden">
+          <div className="p-6 border-b border-border">
             <div className="flex items-center gap-3">
               <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
                 <Shield className="w-5 h-5 text-white" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold text-slate-900 dark:text-white">
+                <h2 className="text-lg font-semibold text-foreground">
                   Security
                 </h2>
-                <p className="text-sm text-slate-500 dark:text-slate-400">
+                <p className="text-sm text-muted-foreground">
                   Manage your password and account security
                 </p>
               </div>
@@ -710,14 +710,14 @@ export default function SettingsPage() {
             )}
 
             {!showPasswordSection ? (
-              <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+              <div className="flex items-center justify-between p-4 bg-muted rounded-xl">
                 <div className="flex items-center gap-3">
-                  <Key className="w-5 h-5 text-slate-400" />
+                  <Key className="w-5 h-5 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <p className="text-sm font-medium text-foreground">
                       Password
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <p className="text-xs text-muted-foreground">
                       Click to change your password
                     </p>
                   </div>
@@ -725,7 +725,7 @@ export default function SettingsPage() {
                 <button
                   onClick={openPasswordModal}
                   disabled={isSendingPasswordCode}
-                  className="px-4 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/10 rounded-lg transition-colors disabled:opacity-50"
+                  className="px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-500/10 rounded-lg transition-colors disabled:opacity-50"
                 >
                   {isSendingPasswordCode ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
@@ -735,27 +735,27 @@ export default function SettingsPage() {
                 </button>
               </div>
             ) : (
-              <div className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-800/50 rounded-xl">
+              <div className="flex items-center justify-between p-4 bg-muted rounded-xl">
                 <div className="flex items-center gap-3">
-                  <Key className="w-5 h-5 text-slate-400" />
+                  <Key className="w-5 h-5 text-muted-foreground" />
                   <div>
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <p className="text-sm font-medium text-foreground">
                       Password
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                      Click to change your password
+                    <p className="text-xs text-muted-foreground">
+                      Cliquez pour changer votre mot de passe
                     </p>
                   </div>
                 </div>
                 <button
                   onClick={openPasswordModal}
                   disabled={isSendingPasswordCode}
-                  className="px-4 py-2 text-sm font-medium text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-500/10 rounded-lg transition-colors disabled:opacity-50"
+                  className="px-4 py-2 text-sm font-medium text-primary-600 dark:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-500/10 rounded-lg transition-colors disabled:opacity-50"
                 >
                   {isSendingPasswordCode ? (
                     <Loader2 className="w-4 h-4 animate-spin" />
                   ) : (
-                    "Change"
+                    "Modifier"
                   )}
                 </button>
               </div>
@@ -764,10 +764,10 @@ export default function SettingsPage() {
         </div>
 
         {/* Account Info */}
-        <div className="bg-slate-50 dark:bg-slate-800/30 rounded-xl p-4 text-center">
-          <p className="text-sm text-slate-500 dark:text-slate-400">
+        <div className="bg-muted rounded-xl p-4 text-center">
+          <p className="text-sm text-muted-foreground">
             Logged in as{" "}
-            <span className="font-medium text-slate-700 dark:text-slate-300">
+            <span className="font-medium text-foreground">
               {user?.email}
             </span>
           </p>
@@ -781,36 +781,36 @@ export default function SettingsPage() {
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={closeEmailChangeModal}
           />
-          <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
             <button
               onClick={closeEmailChangeModal}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
 
             <div className="text-center mb-6">
-              <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center">
+              <div className="w-16 h-16 mx-auto mb-4 rounded-full gradient-primary flex items-center justify-center">
                 <Mail className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+              <h3 className="text-xl font-semibold text-foreground mb-2">
                 {emailChangeStep === "verify_old" 
                   ? "Verify your current email" 
                   : "Confirm new email"
                 }
               </h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-muted-foreground">
                 {emailChangeStep === "verify_old" ? (
                   <>
                     A 6-digit code has been sent to <br />
-                    <span className="font-medium text-slate-700 dark:text-slate-300">
+                    <span className="font-medium text-foreground">
                       {profile?.email}
                     </span>
                   </>
                 ) : (
                   <>
                     A 6-digit code has been sent to <br />
-                    <span className="font-medium text-slate-700 dark:text-slate-300">
+                    <span className="font-medium text-foreground">
                       {pendingEmail}
                     </span>
                   </>
@@ -837,21 +837,21 @@ export default function SettingsPage() {
                   value={digit}
                   onChange={(e) => handleCodeChange(index, e.target.value)}
                   onKeyDown={(e) => handleCodeKeyDown(index, e)}
-                  className="w-12 h-14 text-center text-2xl font-bold bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 outline-none transition-all"
+                  className="w-12 h-14 text-center text-2xl font-bold bg-muted border-2 border-border rounded-xl text-foreground focus:border-primary-500 focus:ring-2 focus:ring-primary-500/20 outline-none transition-all"
                 />
               ))}
             </div>
 
             {/* Progress indicator */}
             <div className="flex justify-center gap-2 mb-6">
-              <div className={`w-3 h-3 rounded-full ${emailChangeStep === "verify_old" ? "bg-purple-500" : "bg-green-500"}`} />
-              <div className={`w-3 h-3 rounded-full ${emailChangeStep === "verify_new" ? "bg-purple-500" : "bg-slate-300 dark:bg-slate-600"}`} />
+              <div className={`w-3 h-3 rounded-full ${emailChangeStep === "verify_old" ? "bg-primary-500" : "bg-green-500"}`} />
+              <div className={`w-3 h-3 rounded-full ${emailChangeStep === "verify_new" ? "bg-primary-500" : "bg-muted-foreground/30"}`} />
             </div>
 
             <button
               onClick={emailChangeStep === "verify_old" ? handleVerifyOldEmail : handleVerifyNewEmail}
               disabled={isVerifyingCode || verificationCode.join("").length !== 6}
-              className="w-full py-3 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-medium rounded-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              className="btn-primary w-full py-3 flex items-center justify-center gap-2"
             >
               {isVerifyingCode ? (
                 <Loader2 className="w-5 h-5 animate-spin" />
@@ -862,7 +862,7 @@ export default function SettingsPage() {
               )}
             </button>
 
-            <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-4">
+            <p className="text-xs text-muted-foreground text-center mt-4">
               {emailChangeStep === "verify_old" 
                 ? "Step 1 of 2: Verify current email"
                 : "Step 2 of 2: Confirm new email"
@@ -879,10 +879,10 @@ export default function SettingsPage() {
             className="absolute inset-0 bg-black/50 backdrop-blur-sm"
             onClick={closePasswordModal}
           />
-          <div className="relative bg-white dark:bg-slate-900 rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
+          <div className="relative bg-card rounded-2xl shadow-2xl w-full max-w-md mx-4 p-6">
             <button
               onClick={closePasswordModal}
-              className="absolute top-4 right-4 p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="absolute top-4 right-4 p-2 text-muted-foreground hover:text-foreground rounded-lg hover:bg-muted transition-colors"
             >
               <X className="w-5 h-5" />
             </button>
@@ -891,7 +891,7 @@ export default function SettingsPage() {
               <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-gradient-to-br from-amber-500 to-orange-500 flex items-center justify-center">
                 <Key className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+              <h3 className="text-xl font-semibold text-foreground mb-2">
                 {passwordStep === "verify_code" 
                   ? "Verify Code" 
                   : passwordStep === "new_password"
@@ -899,11 +899,11 @@ export default function SettingsPage() {
                   : "Sending code..."
                 }
               </h3>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
+              <p className="text-sm text-muted-foreground">
                 {passwordStep === "verify_code" ? (
                   <>
                     A 6-digit code has been sent to <br />
-                    <span className="font-medium text-slate-700 dark:text-slate-300">
+                    <span className="font-medium text-foreground">
                       {profile?.email}
                     </span>
                   </>
@@ -943,7 +943,7 @@ export default function SettingsPage() {
                       value={digit}
                       onChange={(e) => handlePasswordCodeChange(index, e.target.value)}
                       onKeyDown={(e) => handlePasswordCodeKeyDown(index, e)}
-                      className="w-12 h-14 text-center text-2xl font-bold bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                      className="w-12 h-14 text-center text-2xl font-bold bg-muted border-2 border-border rounded-xl text-foreground focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                     />
                   ))}
                 </div>
@@ -951,7 +951,7 @@ export default function SettingsPage() {
                 {/* Progress indicator */}
                 <div className="flex justify-center gap-2 mb-6">
                   <div className="w-3 h-3 rounded-full bg-amber-500" />
-                  <div className="w-3 h-3 rounded-full bg-slate-300 dark:bg-slate-600" />
+                  <div className="w-3 h-3 rounded-full bg-muted-foreground/30" />
                 </div>
 
                 <button
@@ -966,7 +966,7 @@ export default function SettingsPage() {
                   )}
                 </button>
 
-                <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-4">
+                <p className="text-xs text-muted-foreground text-center mt-4">
                   Step 1 of 2: Verify code
                 </p>
               </>
@@ -977,7 +977,7 @@ export default function SettingsPage() {
               <>
                 <div className="space-y-4 mb-6">
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-medium text-foreground mb-2">
                       New Password
                     </label>
                     <input
@@ -985,11 +985,11 @@ export default function SettingsPage() {
                       value={newPassword}
                       onChange={(e) => setNewPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                      className="w-full px-4 py-3 bg-muted border-2 border-border rounded-xl text-foreground placeholder-muted-foreground focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                    <label className="block text-sm font-medium text-foreground mb-2">
                       Confirm Password
                     </label>
                     <input
@@ -997,7 +997,7 @@ export default function SettingsPage() {
                       value={confirmPassword}
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       placeholder="••••••••"
-                      className="w-full px-4 py-3 bg-slate-50 dark:bg-slate-800 border-2 border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white placeholder-slate-400 focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
+                      className="w-full px-4 py-3 bg-muted border-2 border-border rounded-xl text-foreground placeholder-muted-foreground focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20 outline-none transition-all"
                     />
                   </div>
                 </div>
@@ -1020,7 +1020,7 @@ export default function SettingsPage() {
                   )}
                 </button>
 
-                <p className="text-xs text-slate-500 dark:text-slate-400 text-center mt-4">
+                <p className="text-xs text-muted-foreground text-center mt-4">
                   Step 2 of 2: New password
                 </p>
               </>

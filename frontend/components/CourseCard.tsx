@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Users, Calendar } from "lucide-react";
+import { Clock, Users, Calendar, Building2 } from "lucide-react";
 import { getImageUrl } from "@/lib/config";
 import type { CourseListItem } from "@/types/course";
 import Link from "next/link";
@@ -9,21 +9,8 @@ interface CourseCardProps {
   course: CourseListItem;
 }
 
-/**
- * Format price in Tunisian Dinar (DT)
- */
-function formatPriceDT(price: number): string {
-  return `${new Intl.NumberFormat("fr-TN", {
-    minimumFractionDigits: 0,
-    maximumFractionDigits: 0,
-  }).format(price)} DT`;
-}
-
 export function CourseCard({ course }: CourseCardProps) {
   const imageUrl = getImageUrl(course.image_path);
-  
-  // Format price in Tunisian Dinar (DT)
-  const formattedPrice = formatPriceDT(course.price);
 
   // Format date if available
   const formattedStartDate = course.start_date
@@ -36,7 +23,7 @@ export function CourseCard({ course }: CourseCardProps) {
 
   return (
     <Link href={`/courses/${course.id}`}>
-      <div className="group relative bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-purple-500/10 hover:-translate-y-1 hover:border-purple-500/50">
+      <div className="group relative card-elevated overflow-hidden transition-all duration-300 hover:shadow-xl hover:shadow-primary-500/10 hover:-translate-y-1 hover:border-primary-500/50">
         {/* Course Image */}
         <div className="relative h-48 overflow-hidden">
           <img
@@ -52,13 +39,21 @@ export function CourseCard({ course }: CourseCardProps) {
             <span
               className={`px-3 py-1 rounded-full text-xs font-medium ${
                 course.type === "public"
-                  ? "bg-green-500/90 text-white"
+                  ? "bg-emerald-500/90 text-white"
                   : "bg-orange-500/90 text-white"
               }`}
             >
-              {course.type === "public" ? "Public" : "Private"}
+              {course.type === "public" ? "Public" : "Privé"}
             </span>
           </div>
+          {/* Department Badge */}
+          {course.department_display && (
+            <div className="absolute top-3 left-3">
+              <span className="px-3 py-1 rounded-full text-xs font-medium bg-primary-500/90 text-white">
+                {course.department_display}
+              </span>
+            </div>
+          )}
           {/* Gradient Overlay */}
           <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-transparent to-transparent" />
         </div>
@@ -66,19 +61,19 @@ export function CourseCard({ course }: CourseCardProps) {
         {/* Course Content */}
         <div className="p-5">
           {/* Title */}
-          <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2 line-clamp-2 group-hover:text-purple-500 transition-colors">
+          <h3 className="text-lg font-semibold text-foreground mb-2 line-clamp-2 group-hover:text-primary-500 transition-colors">
             {course.title}
           </h3>
 
           {/* Short Description */}
           {course.short_description && (
-            <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 line-clamp-2">
+            <p className="text-sm text-muted-foreground mb-4 line-clamp-2">
               {course.short_description}
             </p>
           )}
 
           {/* Meta Info */}
-          <div className="flex flex-wrap gap-3 mb-4 text-xs text-slate-500 dark:text-slate-400">
+          <div className="flex flex-wrap gap-3 mb-4 text-xs text-muted-foreground">
             {course.duration_hours && (
               <div className="flex items-center gap-1">
                 <Clock className="w-4 h-4" />
@@ -97,15 +92,10 @@ export function CourseCard({ course }: CourseCardProps) {
             )}
           </div>
 
-          {/* Price and CTA */}
-          <div className="flex items-center justify-between pt-4 border-t border-slate-200 dark:border-slate-700/50">
-            <div>
-              <span className="text-2xl font-bold text-slate-900 dark:text-white">
-                {formattedPrice}
-              </span>
-            </div>
-            <span className="inline-flex items-center gap-1 text-sm font-medium text-purple-500 group-hover:text-purple-400 transition-colors">
-              View Details
+          {/* CTA */}
+          <div className="flex items-center justify-end pt-4 border-t border-border">
+            <span className="inline-flex items-center gap-1 text-sm font-medium text-primary-500 group-hover:text-primary-400 transition-colors">
+              Voir les détails
               <svg
                 className="w-4 h-4 transition-transform group-hover:translate-x-1"
                 fill="none"

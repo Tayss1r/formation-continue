@@ -2,7 +2,8 @@
 
 import { ReactNode } from "react";
 import Link from "next/link";
-import { GraduationCap, BookOpen, Users, Award, ArrowRight } from "lucide-react";
+import Image from "next/image";
+import { ArrowLeft } from "lucide-react";
 
 interface AuthLayoutProps {
   children: ReactNode;
@@ -12,111 +13,107 @@ interface AuthLayoutProps {
 
 export default function AuthLayout({ children, title, subtitle }: AuthLayoutProps) {
   return (
-    <main className="min-h-screen flex">
-      {/* Left Panel - Branding */}
-      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative bg-gradient-to-br from-indigo-600 via-purple-600 to-pink-500 overflow-hidden">
-        {/* Animated Background Elements */}
-        <div className="absolute inset-0">
-          <div className="absolute top-20 left-20 w-72 h-72 bg-white/10 rounded-full blur-3xl animate-pulse" />
-          <div className="absolute bottom-20 right-20 w-96 h-96 bg-pink-400/20 rounded-full blur-3xl animate-pulse delay-1000" />
-          <div className="absolute top-1/2 left-1/3 w-64 h-64 bg-indigo-400/20 rounded-full blur-3xl animate-pulse delay-500" />
-        </div>
+    <main className="h-screen flex bg-background overflow-hidden">
+      {/* Left Panel - Visual Section with Background Image - Fixed, no scroll */}
+      <div className="hidden lg:flex lg:w-1/2 xl:w-[55%] relative h-screen sticky top-0">
+        {/* Background Image */}
+        <Image
+          src="/bg-accueil.svg"
+          alt="Background"
+          fill
+          className="object-cover"
+          priority
+        />
         
-        {/* Grid Pattern Overlay */}
-        <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxwYXRoIGQ9Ik0wIDBoNjB2NjBIMHoiLz48cGF0aCBkPSJNMzAgMzBtLTEgMGExIDEgMCAxIDAgMiAwYTEgMSAwIDEgMCAtMiAwIiBmaWxsPSJyZ2JhKDI1NSwyNTUsMjU1LDAuMSkiLz48L2c+PC9zdmc+')] opacity-40" />
+        {/* Dark Overlay for better text readability */}
+        <div className="absolute inset-0 bg-gradient-to-br from-primary-900/80 via-primary-800/70 to-primary-900/80" />
         
         {/* Content */}
-        <div className="relative z-10 flex flex-col justify-between p-12 xl:p-16 w-full">
-          {/* Logo */}
-          <div>
-            <Link href="/" className="inline-flex items-center gap-3 group">
-              <div className="w-14 h-14 rounded-2xl bg-white/20 backdrop-blur-sm flex items-center justify-center group-hover:scale-105 transition-transform border border-white/30">
-                <GraduationCap className="w-8 h-8 text-white" />
-              </div>
-              <div>
-                <span className="text-2xl font-bold text-white block">Formation Continue</span>
-                <span className="text-sm text-white/80">Bureau de Formation Continue</span>
-              </div>
-            </Link>
-          </div>
-          
-          {/* Main Content */}
-          <div className="space-y-8">
-            <div className="space-y-4">
-              <h1 className="text-4xl xl:text-5xl font-bold text-white leading-tight">
-                Développez vos compétences avec nos formations professionnelles
-              </h1>
-              <p className="text-xl text-white/80 max-w-lg">
-                Rejoignez notre plateforme de formation continue et accédez à des cours dispensés par des experts universitaires.
-              </p>
+        <div className="relative z-10 flex flex-col justify-between p-10 xl:p-14 w-full">
+          {/* Logo - NO white box, just the logo directly */}
+          <Link href="/" className="inline-flex items-center gap-3 group w-fit">
+            <Image
+              src="/radess.png"
+              alt="Logo"
+              width={48}
+              height={48}
+              className="object-contain drop-shadow-lg"
+            />
+            <div>
+              <span className="text-xl font-semibold text-white block drop-shadow-md">Formation Continue</span>
+              <span className="text-sm text-white/70">Bureau de Formation</span>
             </div>
-            
-            {/* Features */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-5 border border-white/20 hover:bg-white/15 transition-colors">
-                <BookOpen className="w-8 h-8 text-white mb-3" />
-                <h3 className="text-white font-semibold mb-1">Formations Certifiantes</h3>
-                <p className="text-white/70 text-sm">Obtenez des certificats reconnus</p>
+          </Link>
+          
+          {/* Main Content - Centered */}
+          <div className="space-y-8 max-w-lg">
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <div className="h-px w-12 bg-gradient-to-r from-primary-400 to-transparent" />
+                <span className="text-primary-300 text-sm font-medium uppercase tracking-wider">
+                  ISET Rades
+                </span>
               </div>
-              
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-5 border border-white/20 hover:bg-white/15 transition-colors">
-                <Users className="w-8 h-8 text-white mb-3" />
-                <h3 className="text-white font-semibold mb-1">Experts Universitaires</h3>
-                <p className="text-white/70 text-sm">Formateurs qualifiés et expérimentés</p>
-              </div>
-              
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-5 border border-white/20 hover:bg-white/15 transition-colors">
-                <Award className="w-8 h-8 text-white mb-3" />
-                <h3 className="text-white font-semibold mb-1">Qualité Assurée</h3>
-                <p className="text-white/70 text-sm">Standards universitaires</p>
-              </div>
-              
-              <div className="bg-white/10 backdrop-blur-sm rounded-2xl p-5 border border-white/20 hover:bg-white/15 transition-colors">
-                <ArrowRight className="w-8 h-8 text-white mb-3" />
-                <h3 className="text-white font-semibold mb-1">Flexibilité</h3>
-                <p className="text-white/70 text-sm">Formations adaptées à vos besoins</p>
-              </div>
+              <h1 className="text-4xl xl:text-5xl font-bold text-white leading-[1.15] drop-shadow-lg">
+                Développez vos
+                <span className="block text-transparent bg-clip-text bg-gradient-to-r from-primary-300 to-primary-100">
+                  compétences
+                </span>
+                professionnelles
+              </h1>
+              <p className="text-lg text-white/80 leading-relaxed drop-shadow-md">
+                Accédez à des formations certifiantes dispensées par des experts universitaires et propulsez votre carrière.
+              </p>
             </div>
           </div>
           
           {/* Footer */}
-          <div className="flex items-center justify-between text-white/60 text-sm">
-            <span>© 2025 Formation Continue - Université</span>
-            <div className="flex items-center gap-4">
-              <Link href="/privacy" className="hover:text-white transition-colors">Confidentialité</Link>
-              <Link href="/terms" className="hover:text-white transition-colors">Conditions</Link>
-            </div>
-          </div>
+          <p className="text-white/50 text-sm">
+            © 2026 Bureau de Formation Continue - ISET Rades
+          </p>
         </div>
       </div>
       
-      {/* Right Panel - Auth Form */}
-      <div className="w-full lg:w-1/2 xl:w-[45%] flex items-center justify-center bg-slate-50 dark:bg-[#020817] p-4 sm:p-8 transition-colors duration-300">
-        <div className="w-full max-w-md">
-          {/* Mobile Logo */}
-          <div className="lg:hidden text-center mb-8">
-            <Link href="/" className="inline-flex items-center gap-3">
-              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">
-                <GraduationCap className="w-7 h-7 text-white" />
-              </div>
-              <span className="text-2xl font-bold text-slate-900 dark:text-white">
-                Formation Continue
-              </span>
+      {/* Right Panel - Form Section (Scrollable) */}
+      <div className="w-full lg:w-1/2 xl:w-[45%] flex flex-col h-screen overflow-y-auto">
+        {/* Mobile Header */}
+        <div className="lg:hidden flex items-center justify-between p-4 border-b border-border sticky top-0 bg-background z-20">
+          <Link href="/" className="inline-flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-lg bg-primary-600 flex items-center justify-center overflow-hidden">
+              <Image
+                src="/radess.png"
+                alt="Logo"
+                width={28}
+                height={28}
+                className="object-contain"
+              />
+            </div>
+            <span className="text-base font-semibold text-foreground">Formation Continue</span>
+          </Link>
+        </div>
+        
+        {/* Form Container - Scrollable content */}
+        <div className="flex-1 px-6 py-8 sm:px-8 lg:px-12 xl:px-16">
+          <div className="w-full max-w-md mx-auto">
+            {/* Back Link */}
+            <Link
+              href="/"
+              className="inline-flex items-center gap-2 text-muted-foreground hover:text-primary-600 dark:hover:text-primary-400 text-sm transition-colors mb-6"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Retour à l&apos;accueil
             </Link>
-          </div>
-          
-          {/* Auth Card */}
-          <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 shadow-xl overflow-hidden">
+            
             {/* Header */}
             {(title || subtitle) && (
-              <div className="px-8 pt-8 pb-2 text-center">
+              <div className="mb-8">
                 {title && (
-                  <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
+                  <h1 className="text-2xl sm:text-3xl font-bold text-foreground mb-2">
                     {title}
                   </h1>
                 )}
                 {subtitle && (
-                  <p className="text-slate-600 dark:text-slate-400">
+                  <p className="text-muted-foreground">
                     {subtitle}
                   </p>
                 )}
@@ -124,19 +121,7 @@ export default function AuthLayout({ children, title, subtitle }: AuthLayoutProp
             )}
             
             {/* Form Content */}
-            <div className="p-8">
-              {children}
-            </div>
-          </div>
-          
-          {/* Back to Home */}
-          <div className="mt-6 text-center">
-            <Link
-              href="/"
-              className="text-slate-600 dark:text-slate-400 hover:text-purple-500 dark:hover:text-purple-400 text-sm transition-colors"
-            >
-              ← Retour à l&apos;accueil
-            </Link>
+            {children}
           </div>
         </div>
       </div>

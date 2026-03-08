@@ -212,6 +212,93 @@ class DocumentNotFound(CustomException):
     pass
 
 
+# ==================== Call for Applicants Errors ====================
+
+class CallNotFound(CustomException):
+    """Call for applicants not found"""
+    pass
+
+
+class InvalidCallStatus(CustomException):
+    """Operation not allowed for the current call status"""
+    def __init__(self, message: str = "Operation not allowed for the current call status"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class CallAlreadyPublished(CustomException):
+    """Call has already been published"""
+    pass
+
+
+class CallHasApplications(CustomException):
+    """Cannot delete call because it has applications"""
+    pass
+
+
+class InvalidDepartment(CustomException):
+    """Invalid department value"""
+    pass
+
+
+class CallNotOpenForApplications(CustomException):
+    """Call is not open for applications"""
+    pass
+
+
+# ==================== Application Errors ====================
+
+class ApplicationNotFound(CustomException):
+    """Application not found"""
+    pass
+
+
+class InvalidApplicationStatus(CustomException):
+    """Operation not allowed for the current application status"""
+    def __init__(self, message: str = "Operation not allowed for the current application status"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class DuplicateApplication(CustomException):
+    """Company has already applied to this call"""
+    pass
+
+
+class InvalidDocument(CustomException):
+    """Invalid document type or format"""
+    pass
+
+
+# ==================== Submission Errors ====================
+
+class SubmissionNotFound(CustomException):
+    """Submission not found"""
+    pass
+
+
+class InvalidSubmissionStatus(CustomException):
+    """Operation not allowed for the current submission status"""
+    def __init__(self, message: str = "Operation not allowed for the current submission status"):
+        self.message = message
+        super().__init__(self.message)
+
+
+class DuplicateSubmission(CustomException):
+    """Employee has already submitted for this application"""
+    pass
+
+
+class ApplicationNotApproved(CustomException):
+    """Company application is not approved"""
+    pass
+
+
+class EmployeeNotInCompany(CustomException):
+    """Employee does not belong to this company"""
+    pass
+
+
 def create_exception_handler(
     status_code: int, initial_detail: Any
 ) -> Callable[[Request, Exception], JSONResponse]:
@@ -655,6 +742,177 @@ def register_all_errors(app: FastAPI):
             initial_detail={
                 "message": "Document non trouvé",
                 "error_code": "document_not_found",
+            },
+        ),
+    )
+
+    # ==================== Call for Applicants Error Handlers ====================
+
+    app.add_exception_handler(
+        CallNotFound,
+        create_exception_handler(
+            status_code=status.HTTP_404_NOT_FOUND,
+            initial_detail={
+                "message": "Appel à candidatures non trouvé",
+                "error_code": "call_not_found",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        InvalidCallStatus,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "Cette opération n'est pas autorisée pour le statut actuel de l'appel",
+                "error_code": "invalid_call_status",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        CallAlreadyPublished,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "Cet appel a déjà été publié",
+                "error_code": "call_already_published",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        CallHasApplications,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "Impossible de supprimer cet appel car il contient des candidatures",
+                "error_code": "call_has_applications",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        InvalidDepartment,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "Département invalide",
+                "error_code": "invalid_department",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        CallNotOpenForApplications,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "Cet appel n'est pas ouvert aux candidatures",
+                "error_code": "call_not_open",
+            },
+        ),
+    )
+
+    # ==================== Application Error Handlers ====================
+
+    app.add_exception_handler(
+        ApplicationNotFound,
+        create_exception_handler(
+            status_code=status.HTTP_404_NOT_FOUND,
+            initial_detail={
+                "message": "Candidature non trouvée",
+                "error_code": "application_not_found",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        InvalidApplicationStatus,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "Cette opération n'est pas autorisée pour le statut actuel de la candidature",
+                "error_code": "invalid_application_status",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        DuplicateApplication,
+        create_exception_handler(
+            status_code=status.HTTP_409_CONFLICT,
+            initial_detail={
+                "message": "Votre entreprise a déjà soumis une candidature pour cet appel",
+                "error_code": "duplicate_application",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        InvalidDocument,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "Type ou format de document invalide",
+                "error_code": "invalid_document",
+            },
+        ),
+    )
+
+    # ==================== Submission Error Handlers ====================
+
+    app.add_exception_handler(
+        SubmissionNotFound,
+        create_exception_handler(
+            status_code=status.HTTP_404_NOT_FOUND,
+            initial_detail={
+                "message": "Soumission non trouvée",
+                "error_code": "submission_not_found",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        InvalidSubmissionStatus,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "Cette opération n'est pas autorisée pour le statut actuel de la soumission",
+                "error_code": "invalid_submission_status",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        DuplicateSubmission,
+        create_exception_handler(
+            status_code=status.HTTP_409_CONFLICT,
+            initial_detail={
+                "message": "Vous avez déjà soumis vos documents pour cette candidature",
+                "error_code": "duplicate_submission",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        ApplicationNotApproved,
+        create_exception_handler(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            initial_detail={
+                "message": "La candidature de l'entreprise n'est pas approuvée",
+                "error_code": "application_not_approved",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        EmployeeNotInCompany,
+        create_exception_handler(
+            status_code=status.HTTP_403_FORBIDDEN,
+            initial_detail={
+                "message": "Vous n'appartenez pas à cette entreprise",
+                "error_code": "employee_not_in_company",
             },
         ),
     )

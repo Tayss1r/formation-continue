@@ -1,581 +1,264 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useState, useEffect, use } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
-  ArrowLeft,
-  Calendar,
+  BookOpen,
   Clock,
   Users,
-  MapPin,
-  User,
-  Mail,
-  Phone,
-  CheckCircle,
-  Share2,
-  Heart,
+  Tag,
+  ArrowLeft,
+  FileText,
+  Download,
   AlertCircle,
-  Loader2,
-  BookOpen,
+  Calendar,
+  Building2,
+  GraduationCap,
+  CheckCircle,
 } from "lucide-react";
-import { Header } from "@/components/Header";
 import { getCourseDetails } from "@/lib/courses";
-import { getCourseAvailability, getCourseAvailabilityWithBookingStatus } from "@/lib/booking";
+import { getCourseMaterialsForEmployee, getMaterialDownloadUrl, type CourseMaterial } from "@/lib/materials";
 import { getImageUrl } from "@/lib/config";
 import { useAuth } from "@/contexts/AuthContext";
 import type { Course } from "@/types/course";
-import type { AvailabilitySlot, AvailabilitySlotWithBookingStatus } from "@/types/booking";
-import { BookingModal } from "@/components/BookingModal";
 
-export default function CourseDetailsPage() {
-  const params = useParams();
-  const courseId = Number(params.id);
+export default function CourseDetailPage({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = use(params);
+  const router = useRouter();
   const { user, isAuthenticated } = useAuth();
-
   const [course, setCourse] = useState<Course | null>(null);
-  const [availabilitySlots, setAvailabilitySlots] = useState<AvailabilitySlotWithBookingStatus[]>([]);
+  const [materials, setMaterials] = useState<CourseMaterial[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [slotsLoading, setSlotsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedSlot, setSelectedSlot] = useState<AvailabilitySlotWithBookingStatus | null>(null);
-  const [showBookingModal, setShowBookingModal] = useState(false);
 
   useEffect(() => {
-    async function fetchCourse() {
+    async function fetchData() {
+      setIsLoading(true);
+      setError(null);
+
       try {
-        setIsLoading(true);
-        const data = await getCourseDetails(courseId);
-        setCourse(data);
+        const courseData = await getCourseDetails(parseInt(id));
+        setCourse(courseData);
+
+        // Fetch materials if authenticated
+        if (isAuthenticated) {
+          try {
+            const materialsData = await getCourseMaterialsForEmployee(parseInt(id));
+            setMaterials(materialsData.materials);
+          } catch {
+            // Materials might not be accessible
+            console.log("Could not fetch materials");
+          }
+        }
       } catch (err) {
-        console.error("Failed to fetch course:", err);
-        setError("Course not found or unavailable.");
+        console.error("Error loading course:", err);
+        setError("Erreur lors du chargement du cours");
       } finally {
         setIsLoading(false);
       }
     }
 
-    async function fetchAvailability() {
-      try {
-        setSlotsLoading(true);
-        // Use authenticated endpoint if user is logged in and is a company
-        // Set onlyBookable to TRUE: companies only see sessions with valid deadlines
-        if (isAuthenticated && user?.role === "company") {
-          const response = await getCourseAvailabilityWithBookingStatus(courseId, 1, 50, true);
-          setAvailabilitySlots(response.slots);
-        } else {
-          // Use public endpoint - only show bookable sessions
-          const response = await getCourseAvailability(courseId, 1, 50, true);
-          setAvailabilitySlots(response.slots);
-        }
-      } catch (err) {
-        console.error("Failed to fetch availability:", err);
-        // Fallback to public endpoint on error
-        try {
-          const response = await getCourseAvailability(courseId, 1, 50, true);
-          setAvailabilitySlots(response.slots);
-        } catch {
-          // Ignore fallback error
-        }
-      } finally {
-        setSlotsLoading(false);
-      }
-    }
+    fetchData();
+  }, [id, isAuthenticated]);
 
-    if (courseId) {
-      fetchCourse();
-      fetchAvailability();
-    }
-  }, [courseId, isAuthenticated, user?.role]);
-
-  // Format price in Tunisian Dinar (DT)
-  const formatPrice = (price: number) => {
-    return `${new Intl.NumberFormat("fr-TN", {
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(price)} DT`;
+  const formatFileSize = (bytes: number) => {
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
-  // Format date
-  const formatDate = (dateString?: string) => {
-    if (!dateString) return null;
-    return new Date(dateString).toLocaleDateString("fr-FR", {
-      weekday: "long",
-      day: "numeric",
-      month: "long",
-      year: "numeric",
-    });
-  };
-
-  // Format short date for slots
-  const formatShortDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString("fr-FR", {
-      day: "numeric",
-      month: "short",
-      year: "numeric",
-    });
-  };
-
-  // Format time
-  const formatTime = (dateString: string) => {
-    return new Date(dateString).toLocaleTimeString("fr-FR", {
-      hour: "2-digit",
-      minute: "2-digit",
-    });
-  };
-
-  // Check if user is a company
-  const isCompanyUser = user?.role === "company";
-
-  // Handle booking slot selection
-  const handleBookSlot = (slot: AvailabilitySlotWithBookingStatus) => {
-    if (!isAuthenticated) {
-      // Redirect to login
-      window.location.href = "/login?redirect=" + encodeURIComponent(`/courses/${courseId}`);
-      return;
-    }
-    if (!isCompanyUser) {
-      alert("Seuls les comptes entreprise peuvent réserver des formations.");
-      return;
-    }
-    setSelectedSlot(slot);
-    setShowBookingModal(true);
-  };
-
-  // Handle booking success
-  const handleBookingSuccess = async () => {
-    setShowBookingModal(false);
-    setSelectedSlot(null);
-    // Refresh availability slots with booking status
-    try {
-      if (isAuthenticated && user?.role === "company") {
-        const response = await getCourseAvailabilityWithBookingStatus(courseId, 1, 50, true);
-        setAvailabilitySlots(response.slots);
-      } else {
-        const response = await getCourseAvailability(courseId, 1, 50, true);
-        setAvailabilitySlots(response.slots);
-      }
-    } catch {
-      // Ignore refresh error
-    }
+  const getFileIcon = (fileType: string) => {
+    if (fileType.includes("pdf")) return "📄";
+    if (fileType.includes("video")) return "🎥";
+    if (fileType.includes("image")) return "🖼️";
+    if (fileType.includes("presentation") || fileType.includes("ppt"))
+      return "📊";
+    return "📁";
   };
 
   if (isLoading) {
     return (
-      <main className="min-h-screen bg-slate-50 dark:bg-[#020817]">
-        <Header />
-        <div className="flex items-center justify-center min-h-[60vh]">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+      <div className="min-h-screen bg-background">
+        <div className="max-w-5xl mx-auto px-4 py-8">
+          <div className="h-8 w-32 bg-muted rounded animate-pulse mb-6" />
+          <div className="h-64 bg-muted rounded-2xl animate-pulse mb-6" />
+          <div className="space-y-4">
+            <div className="h-10 w-2/3 bg-muted rounded animate-pulse" />
+            <div className="h-24 bg-muted rounded animate-pulse" />
+          </div>
         </div>
-      </main>
+      </div>
     );
   }
 
   if (error || !course) {
     return (
-      <main className="min-h-screen bg-slate-50 dark:bg-[#020817]">
-        <Header />
-        <div className="flex flex-col items-center justify-center min-h-[60vh] px-4">
-          <h1 className="text-2xl font-bold text-slate-900 dark:text-white mb-4">
-            Course Not Found
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <div className="text-center">
+          <AlertCircle className="w-16 h-16 mx-auto text-red-500 mb-4" />
+          <h1 className="text-2xl font-bold text-foreground mb-2">
+            Cours introuvable
           </h1>
-          <p className="text-slate-600 dark:text-slate-400 mb-8">{error}</p>
-          <Link
-            href="/"
-            className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-purple-500 text-white font-medium hover:bg-purple-600 transition-colors"
-          >
-            <ArrowLeft className="w-5 h-5" />
-            Back to Home
+          <p className="text-muted-foreground mb-6">
+            {error || "Ce cours n'existe pas ou a été supprimé"}
+          </p>
+          <Link href="/courses" className="btn-primary">
+            Voir tous les cours
           </Link>
         </div>
-      </main>
+      </div>
     );
   }
 
   return (
-    <main className="min-h-screen bg-slate-50 dark:bg-[#020817]">
-      <Header />
+    <div className="min-h-screen bg-background">
+      <div className="max-w-5xl mx-auto px-4 py-8">
+        {/* Back Button */}
+        <button
+          onClick={() => router.back()}
+          className="inline-flex items-center gap-2 text-muted-foreground hover:text-foreground transition-colors mb-6"
+        >
+          <ArrowLeft className="w-4 h-4" />
+          Retour
+        </button>
 
-      {/* Breadcrumb */}
-      <div className="pt-24 pb-4 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <nav className="flex items-center gap-2 text-sm">
-            <Link
-              href="/"
-              className="text-slate-500 hover:text-purple-500 transition-colors"
-            >
-              Accueil
-            </Link>
-            <span className="text-slate-400">/</span>
-            <Link
-              href="/courses"
-              className="text-slate-500 hover:text-purple-500 transition-colors"
-            >
-              Formations
-            </Link>
-            <span className="text-slate-400">/</span>
-            <span className="text-slate-900 dark:text-white truncate max-w-xs">
+        {/* Course Header */}
+        <div className="bg-card rounded-2xl border border-border overflow-hidden mb-6">
+          {/* Image */}
+          <div className="aspect-[3/1] bg-muted relative">
+            {course.image_path ? (
+              <img
+                src={getImageUrl(course.image_path)}
+                alt={course.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary-100 to-primary-200 dark:from-primary-900/30 dark:to-primary-800/30">
+                <BookOpen className="w-20 h-20 text-primary-400" />
+              </div>
+            )}
+          </div>
+
+          {/* Content */}
+          <div className="p-6">
+            <h1 className="text-3xl font-bold text-foreground mb-4">
               {course.title}
-            </span>
-          </nav>
-        </div>
-      </div>
+            </h1>
 
-      {/* Main Content */}
-      <div className="pb-20 px-4 sm:px-6 lg:px-8">
-        <div className="max-w-7xl mx-auto">
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Left Column - Main Content */}
-            <div className="lg:col-span-2">
-              {/* Course Image */}
-              <div className="relative rounded-2xl overflow-hidden mb-8">
-                <img
-                  src={getImageUrl(course.image_path)}
-                  alt={course.title}
-                  className="w-full h-[400px] object-cover"
-                  onError={(e) => {
-                    (e.target as HTMLImageElement).src = "/placeholder-course.jpg";
-                  }}
-                />
-                {/* Course Type Badge */}
-                <div className="absolute top-4 left-4">
-                  <span
-                    className={`px-4 py-2 rounded-full text-sm font-medium ${
-                      course.type === "public"
-                        ? "bg-green-500 text-white"
-                        : "bg-orange-500 text-white"
-                    }`}
-                  >
-                    {course.type === "public" ? "Formation Publique" : "Formation Privée"}
-                  </span>
-                </div>
-                {/* Share & Favorite */}
-                <div className="absolute top-4 right-4 flex gap-2">
-                  <button className="p-2 rounded-full bg-white/90 dark:bg-slate-800/90 text-slate-700 dark:text-white hover:bg-white dark:hover:bg-slate-700 transition-colors">
-                    <Share2 className="w-5 h-5" />
-                  </button>
-                  <button className="p-2 rounded-full bg-white/90 dark:bg-slate-800/90 text-slate-700 dark:text-white hover:bg-white dark:hover:bg-slate-700 transition-colors">
-                    <Heart className="w-5 h-5" />
-                  </button>
-                </div>
-              </div>
-
-              {/* Course Title & Description */}
-              <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 p-8 mb-8">
-                <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-4">
-                  {course.title}
-                </h1>
-
-                {course.short_description && (
-                  <p className="text-lg text-slate-600 dark:text-slate-400 mb-6">
-                    {course.short_description}
-                  </p>
-                )}
-
-                <div className="prose prose-slate dark:prose-invert max-w-none">
-                  <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-4">
-                    Description de la Formation
-                  </h2>
-                  <div className="text-slate-600 dark:text-slate-400 whitespace-pre-wrap">
-                    {course.description}
-                  </div>
-                </div>
-              </div>
-
-              {/* What You'll Learn */}
-              <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 p-8 mb-8">
-                <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-6">
-                  Ce que vous apprendrez
-                </h2>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {[
-                    "Maîtrise des concepts fondamentaux",
-                    "Mise en pratique à travers des exercices",
-                    "Études de cas réels",
-                    "Méthodologies éprouvées",
-                    "Outils et techniques actuels",
-                    "Certification à la fin de la formation",
-                  ].map((item, index) => (
-                    <div key={index} className="flex items-start gap-3">
-                      <CheckCircle className="w-5 h-5 text-green-500 shrink-0 mt-0.5" />
-                      <span className="text-slate-600 dark:text-slate-400">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Instructor */}
-              {course.professor && (
-                <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 p-8">
-                  <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-6">
-                    Formateur
-                  </h2>
-                  <div className="flex items-start gap-4">
-                    <div className="w-16 h-16 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white text-xl font-bold">
-                      {course.professor.specialization.charAt(0).toUpperCase()}
-                    </div>
-                    <div>
-                      <h3 className="text-lg font-semibold text-slate-900 dark:text-white">
-                        Expert en {course.professor.specialization}
-                      </h3>
-                      <p className="text-slate-600 dark:text-slate-400 mt-1">
-                        Spécialisation: {course.professor.specialization}
-                      </p>
-                    </div>
-                  </div>
-                </div>
+            {/* Meta */}
+            <div className="flex flex-wrap items-center gap-4 mb-6 text-sm text-muted-foreground">
+              {course.department && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Building2 className="w-4 h-4" />
+                  {course.department}
+                </span>
+              )}
+              {course.duration_hours && (
+                <span className="inline-flex items-center gap-1.5">
+                  <Clock className="w-4 h-4" />
+                  {course.duration_hours}h de formation
+                </span>
+              )}
+              {course.price && (
+                <span className="inline-flex items-center gap-1.5 text-primary-600 dark:text-primary-400 font-semibold">
+                  <Tag className="w-4 h-4" />
+                  {course.price.toLocaleString()} DA
+                </span>
               )}
             </div>
 
-            {/* Right Column - Sidebar */}
-            <div className="lg:col-span-1">
-              <div className="sticky top-24">
-                {/* Price Card */}
-                <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 p-6 mb-6">
-                  <div className="text-center mb-6">
-                    <div className="text-4xl font-bold text-slate-900 dark:text-white mb-2">
-                      {formatPrice(course.price)}
-                    </div>
-                    <p className="text-slate-500 dark:text-slate-400 text-sm">
-                      par participant
-                    </p>
-                  </div>
-
-                  <button className="w-full px-6 py-4 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 transition-opacity mb-4">
-                    Demander cette Formation
-                  </button>
-
-                  <button className="w-full px-6 py-4 rounded-xl border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-white font-semibold hover:bg-slate-50 dark:hover:bg-slate-700/50 transition-colors">
-                    Contacter pour Devis
-                  </button>
-                </div>
-
-                {/* Course Info */}
-                <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 p-6">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-                    Informations
-                  </h3>
-                  
-                  <div className="space-y-4">
-                    {course.duration_hours && (
-                      <div className="flex items-center gap-3">
-                        <Clock className="w-5 h-5 text-purple-500" />
-                        <div>
-                          <p className="text-sm text-slate-500 dark:text-slate-400">Durée</p>
-                          <p className="font-medium text-slate-900 dark:text-white">
-                            {course.duration_hours} heures
-                          </p>
-                        </div>
-                      </div>
-                    )}
-
-                    <div className="flex items-center gap-3">
-                      <Users className="w-5 h-5 text-purple-500" />
-                      <div>
-                        <p className="text-sm text-slate-500 dark:text-slate-400">Capacité</p>
-                        <p className="font-medium text-slate-900 dark:text-white">
-                          {course.max_seats} participants max
-                        </p>
-                      </div>
-                    </div>
-
-                    {course.sector && (
-                      <div className="flex items-center gap-3">
-                        <BookOpen className="w-5 h-5 text-purple-500" />
-                        <div>
-                          <p className="text-sm text-slate-500 dark:text-slate-400">Secteur</p>
-                          <p className="font-medium text-slate-900 dark:text-white">
-                            {course.sector}
-                          </p>
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                {/* Available Sessions */}
-                <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 p-6 mt-6">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-                    Sessions Disponibles
-                  </h3>
-                  
-                  {slotsLoading ? (
-                    <div className="flex justify-center py-8">
-                      <div className="w-8 h-8 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                    </div>
-                  ) : availabilitySlots.length === 0 ? (
-                    <div className="text-center py-6">
-                      <Calendar className="w-12 h-12 text-slate-400 mx-auto mb-3" />
-                      <p className="text-slate-600 dark:text-slate-400 text-sm">
-                        Aucune session disponible pour le moment.
-                      </p>
-                      <p className="text-slate-500 dark:text-slate-500 text-xs mt-1">
-                        Contactez-nous pour connaître les prochaines dates.
-                      </p>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {availabilitySlots.map((slot) => {
-                        const remainingSeats = slot.max_seats - slot.reserved_seats;
-                        const deadlinePassed = new Date(slot.booking_deadline) < new Date();
-                        const hasUserBooking = !!slot.user_booking_id;
-                        const userBookingStatus = slot.user_booking_status;
-                        const canBook = !deadlinePassed && remainingSeats > 0 && slot.status === "open" && !hasUserBooking;
-                        
-                        // Get booking status badge for user's booking
-                        const getBookingStatusBadge = (status: string) => {
-                          switch (status) {
-                            case "reserved":
-                              return (
-                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-700 dark:bg-yellow-500/20 dark:text-yellow-400">
-                                  Réservé
-                                </span>
-                              );
-                            case "confirmed":
-                              return (
-                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400">
-                                  Confirmé
-                                </span>
-                              );
-                            case "cancelled":
-                              return (
-                                <span className="px-2 py-1 rounded-full text-xs font-medium bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400">
-                                  Annulé
-                                </span>
-                              );
-                            default:
-                              return null;
-                          }
-                        };
-                        
-                        return (
-                          <div
-                            key={slot.id}
-                            className={`p-4 rounded-xl border ${
-                              hasUserBooking && userBookingStatus !== "cancelled"
-                                ? "border-green-200 dark:border-green-500/30 bg-green-50/50 dark:bg-green-500/10"
-                                : canBook
-                                ? "border-purple-200 dark:border-purple-500/30 bg-purple-50/50 dark:bg-purple-500/10"
-                                : "border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50 opacity-60"
-                            }`}
-                          >
-                            <div className="flex items-start justify-between mb-2">
-                              <div className="flex items-center gap-2">
-                                <Calendar className="w-4 h-4 text-purple-500" />
-                                <span className="font-medium text-slate-900 dark:text-white text-sm">
-                                  {formatShortDate(slot.start_date)}
-                                </span>
-                              </div>
-                              {hasUserBooking && userBookingStatus ? (
-                                getBookingStatusBadge(userBookingStatus)
-                              ) : (
-                                <span
-                                  className={`px-2 py-0.5 rounded-full text-xs font-medium ${
-                                    remainingSeats > 5
-                                      ? "bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400"
-                                      : remainingSeats > 0
-                                      ? "bg-orange-100 text-orange-700 dark:bg-orange-500/20 dark:text-orange-400"
-                                      : "bg-red-100 text-red-700 dark:bg-red-500/20 dark:text-red-400"
-                                  }`}
-                                >
-                                  {remainingSeats > 0 ? `${remainingSeats} places` : "Complet"}
-                                </span>
-                              )}
-                            </div>
-
-                            <div className="text-xs text-slate-500 dark:text-slate-400 space-y-1 mb-3">
-                              <div className="flex items-center gap-1">
-                                <Clock className="w-3 h-3" />
-                                {formatShortDate(slot.start_date)} - {formatShortDate(slot.end_date)}
-                              </div>
-                              {slot.schedule && (
-                                <div className="flex items-center gap-1">
-                                  <MapPin className="w-3 h-3" />
-                                  {slot.schedule}
-                                </div>
-                              )}
-                              {!hasUserBooking && (
-                                <div className="flex items-center gap-1 text-orange-600 dark:text-orange-400">
-                                  <AlertCircle className="w-3 h-3" />
-                                  Réserver avant le {formatShortDate(slot.booking_deadline)}
-                                </div>
-                              )}
-                            </div>
-
-                            {hasUserBooking && userBookingStatus !== "cancelled" ? (
-                              <div className="w-full py-2 rounded-lg text-sm font-medium text-center bg-green-100 text-green-700 dark:bg-green-500/20 dark:text-green-400">
-                                <CheckCircle className="w-4 h-4 inline-block mr-1" />
-                                Déjà réservé
-                              </div>
-                            ) : (
-                              <button
-                                onClick={() => handleBookSlot(slot)}
-                                disabled={!canBook}
-                                className={`w-full py-2 rounded-lg text-sm font-medium transition-colors ${
-                                  canBook
-                                    ? "bg-purple-500 text-white hover:bg-purple-600"
-                                    : "bg-slate-200 text-slate-500 dark:bg-slate-700 dark:text-slate-400 cursor-not-allowed"
-                                }`}
-                              >
-                                {deadlinePassed
-                                  ? "Délai dépassé"
-                                  : remainingSeats === 0
-                                  ? "Complet"
-                                  : "Réserver cette session"}
-                              </button>
-                            )}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  )}
-                </div>
-
-                {/* Contact Card */}
-                <div className="bg-gradient-to-br from-purple-500/10 to-pink-500/10 rounded-2xl border border-purple-500/20 p-6 mt-6">
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-                    Besoin d&apos;aide ?
-                  </h3>
-                  <p className="text-slate-600 dark:text-slate-400 text-sm mb-4">
-                    Notre équipe est disponible pour répondre à vos questions.
-                  </p>
-                  <div className="space-y-2">
-                    <a
-                      href="mailto:formation@university.dz"
-                      className="flex items-center gap-2 text-purple-500 hover:text-purple-600 text-sm"
-                    >
-                      <Mail className="w-4 h-4" />
-                      formation@university.dz
-                    </a>
-                    <a
-                      href="tel:+213123456789"
-                      className="flex items-center gap-2 text-purple-500 hover:text-purple-600 text-sm"
-                    >
-                      <Phone className="w-4 h-4" />
-                      +213 123 456 789
-                    </a>
-                  </div>
-                </div>
+            {/* Description */}
+            {course.description && (
+              <div className="prose prose-sm dark:prose-invert max-w-none">
+                <p className="text-muted-foreground whitespace-pre-wrap">
+                  {course.description}
+                </p>
               </div>
-            </div>
+            )}
           </div>
         </div>
-      </div>
 
-      {/* Booking Modal */}
-      {selectedSlot && (
-        <BookingModal
-          isOpen={showBookingModal}
-          onClose={() => {
-            setShowBookingModal(false);
-            setSelectedSlot(null);
-          }}
-          slot={selectedSlot}
-          courseTitle={course.title}
-          pricePerPerson={course.price}
-          onSuccess={handleBookingSuccess}
-        />
-      )}
-    </main>
+        {/* Course Details Grid */}
+        {course.learning_outcomes && course.learning_outcomes.length > 0 && (
+          <div className="bg-card rounded-2xl border border-border p-6 mb-6">
+            <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <GraduationCap className="w-5 h-5 text-primary-500" />
+              Objectifs de la formation
+            </h2>
+            <div className="space-y-2">
+              {course.learning_outcomes.map((outcome: string, index: number) => (
+                <div
+                  key={index}
+                  className="flex items-start gap-2 text-muted-foreground"
+                >
+                  <CheckCircle className="w-4 h-4 text-green-500 mt-0.5 flex-shrink-0" />
+                  <span>{outcome}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Materials Section */}
+        {isAuthenticated && materials.length > 0 && (
+          <div className="bg-card rounded-2xl border border-border p-6 mb-6">
+            <h2 className="text-lg font-semibold text-foreground mb-4 flex items-center gap-2">
+              <FileText className="w-5 h-5 text-primary-500" />
+              Supports de cours
+            </h2>
+            <div className="space-y-3">
+              {materials.map((material) => (
+                <div
+                  key={material.id}
+                  className="flex items-center gap-4 p-4 rounded-xl border border-border hover:bg-muted/50 transition-colors"
+                >
+                  <span className="text-2xl">{getFileIcon(material.file_type)}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-foreground truncate">
+                      {material.title}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {formatFileSize(material.file_size)}
+                    </p>
+                  </div>
+                  <a
+                    href={getMaterialDownloadUrl(material.id)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400 hover:bg-primary-200 dark:hover:bg-primary-900/50 transition-colors text-sm font-medium"
+                  >
+                    <Download className="w-4 h-4" />
+                    Télécharger
+                  </a>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Info Box */}
+        <div className="bg-primary-50 dark:bg-primary-900/20 rounded-2xl p-6 border border-primary-200 dark:border-primary-800">
+          <h3 className="text-lg font-semibold text-foreground mb-2">
+            Intéressé par cette formation ?
+          </h3>
+          <p className="text-muted-foreground mb-4">
+            Les inscriptions se font via les appels à candidatures. Consultez les appels actifs 
+            pour voir si cette formation est disponible.
+          </p>
+          <Link
+            href="/#active-calls"
+            className="btn-primary inline-flex items-center gap-2"
+          >
+            <Calendar className="w-4 h-4" />
+            Voir les appels à candidatures
+          </Link>
+        </div>
+      </div>
+    </div>
   );
 }

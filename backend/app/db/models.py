@@ -1,5 +1,20 @@
+"""
+Domain Models for Formation Continue - Call for Applicants Workflow
+
+This module defines the complete data model for the refactored system centered
+around Calls for Applicants rather than session-based training.
+
+Key Entities:
+- CallForApplicants: Public calls published by Coordinators
+- CompanyApplication: Company applications to calls
+- ApplicationDocument: Documents uploaded by companies
+- EmployeeSubmission: Employee document submissions (after company approval)
+- EmployeeSubmissionDocument: Individual employee documents
+- AuditLog: Traceability for all decisions
+"""
+
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from enum import Enum
 from .database import Base
 
@@ -8,57 +23,111 @@ from sqlalchemy import (
     text,
     ForeignKey,
     UniqueConstraint,
-    Enum as SQLEnum
+    Index,
+    Enum as SQLEnum,
 )
 from sqlalchemy.orm import (
     Mapped,
     mapped_column,
     relationship,
 )
+from sqlalchemy.dialects.postgresql import JSONB
 
+
+# =============================================================================
+# ENUMS
+# =============================================================================
 
 class UserRole(str, Enum):
+    """User roles in the system"""
     COMPANY = "company"
     EMPLOYEE = "employee"
     STAFF = "staff"
     PROFESSOR = "professor"
     ADMIN = "admin"
+    COORDINATOR = "coordinator"
 
 
 class CourseType(str, Enum):
+    """Course visibility type"""
     PUBLIC = "public"
     PRIVATE = "private"
 
 
-class RequestStatus(str, Enum):
+class Department(str, Enum):
+    """Department/field for courses and calls"""
+    INFORMATIQUE = "informatique"
+    MECANIQUE = "mecanique"
+    ELECTRIQUE = "electrique"
+    CIVIL = "civil"
+    GESTION = "gestion"
+    
+    @classmethod
+    def get_display_name(cls, value: str) -> str:
+        """Get the display name for a department value"""
+        display_names = {
+            "informatique": "Technologie de l'informatique",
+            "mecanique": "Génie mécanique",
+            "electrique": "Génie électrique",
+            "civil": "Génie civil",
+            "gestion": "Sciences Économiques et Sciences de Gestion",
+        }
+        return display_names.get(value, value)
+
+
+class AccountStatus(str, Enum):
+    """Account approval status for professors and companies"""
     PENDING = "pending"
-    ACCEPTED = "accepted"
+    ACTIVE = "active"
+    REJECTED = "rejected"
+    BLOCKED = "blocked"
+
+
+class CallStatus(str, Enum):
+    """Status of a Call for Applicants"""
+    DRAFT = "draft"
+    PUBLISHED = "published"
+    CLOSED = "closed"
+    UNDER_REVIEW = "under_review"
+    RESULTS_PUBLISHED = "results_published"
+
+
+class ApplicationStatus(str, Enum):
+    """Status of a company application"""
+    SUBMITTED = "submitted"
+    DOCUMENTS_PENDING = "documents_pending"
+    UNDER_REVIEW = "under_review"
+    ADDITIONAL_INFO_REQUIRED = "additional_info_required"
+    APPROVED = "approved"
     REJECTED = "rejected"
 
 
-class AvailabilitySlotStatus(str, Enum):
-    """Status of a course availability slot"""
-    OPEN = "open"                    # Accepting bookings
-    PENDING_REVIEW = "pending_review"  # Booking deadline reached, awaiting staff decision
-    CONFIRMED = "confirmed"          # Session confirmed by staff
-    CANCELLED = "cancelled"          # Session cancelled by staff
+class DocumentReviewStatus(str, Enum):
+    """Status of document review"""
+    PENDING = "pending"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+    REVISION_REQUIRED = "revision_required"
 
 
-class BookingStatus(str, Enum):
-    """Status of a company booking"""
-    RESERVED = "reserved"            # Seats reserved, awaiting session confirmation
-    CONFIRMED = "confirmed"          # Session confirmed, booking is final
-    CANCELLED = "cancelled"          # Booking cancelled (by company or due to session cancellation)
-
-
-class DocumentStatus(str, Enum):
-    """Status of an employee identity document"""
-    PENDING_REVIEW = "pending_review"
-    VERIFIED = "verified"
+class EmployeeSubmissionStatus(str, Enum):
+    """Status of employee document submission"""
+    PENDING = "pending"
+    SUBMITTED = "submitted"
+    UNDER_REVIEW = "under_review"
+    APPROVED = "approved"
     REJECTED = "rejected"
 
+
+# =============================================================================
+# USER & AUTH MODELS
+# =============================================================================
 
 class User(Base):
+    """
+    Core user model. All authenticated users have a User record.
+    Role determines which profile type they have (Company, Professor, EmployeeProfile).
+    """
     __tablename__ = "users"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -85,12 +154,27 @@ class User(Base):
         nullable=False,
     )
 
+    account_status: Mapped[AccountStatus] = mapped_column(
+        SQLEnum(
+            AccountStatus,
+            name="account_status_type",
+            validate_strings=True,
+            create_constraint=True,
+            values_callable=lambda obj: [e.value for e in obj]
+        ),
+        server_default="active",
+        nullable=False,
+    )
+
+    verification_document: Mapped[Optional[str]] = mapped_column(nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         server_default=text("NOW()"),
         nullable=False,
     )
 
+    # Relationships
     company = relationship(
         "Company",
         back_populates="user",
@@ -105,7 +189,6 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
-    # Employee profile for employee users
     employee_profile = relationship(
         "EmployeeProfile",
         back_populates="user",
@@ -113,15 +196,23 @@ class User(Base):
         cascade="all, delete-orphan",
     )
 
-    # Courses created by staff users
     created_courses = relationship(
         "Course",
         back_populates="created_by",
         cascade="all, delete-orphan",
     )
+    
+    created_calls = relationship(
+        "CallForApplicants",
+        back_populates="created_by",
+        foreign_keys="CallForApplicants.created_by_id",
+    )
 
 
 class Company(Base):
+    """
+    Company profile. Companies can apply to calls and manage employees.
+    """
     __tablename__ = "companies"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -138,50 +229,18 @@ class Company(Base):
 
     user = relationship("User", back_populates="company")
 
-    employees = relationship(
-        "Employee",
+    # Applications to calls
+    applications = relationship(
+        "CompanyApplication",
         back_populates="company",
-        cascade="all, delete-orphan",
-    )
-
-    requests = relationship(
-        "TrainingRequest",
-        back_populates="company",
-        cascade="all, delete-orphan",
-    )
-
-    enrollment_codes = relationship(
-        "EnrollmentCode",
-        back_populates="company",
-        cascade="all, delete-orphan",
-    )
-
-
-
-class Employee(Base):
-    __tablename__ = "employees"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    company_id: Mapped[int] = mapped_column(
-        ForeignKey("companies.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
-    first_name: Mapped[str] = mapped_column(nullable=False)
-    last_name: Mapped[str] = mapped_column(nullable=False)
-    email: Mapped[str] = mapped_column(nullable=False)
-
-    company = relationship("Company", back_populates="employees")
-
-    enrollments = relationship(
-        "Enrollment",
-        back_populates="employee",
         cascade="all, delete-orphan",
     )
 
 
 class Professor(Base):
+    """
+    Professor profile. Professors can be assigned to courses.
+    """
     __tablename__ = "professors"
 
     id: Mapped[int] = mapped_column(primary_key=True)
@@ -194,6 +253,17 @@ class Professor(Base):
 
     specialization: Mapped[str] = mapped_column(nullable=False)
     hourly_rate: Mapped[float] = mapped_column(nullable=False)
+    
+    department: Mapped[Optional[Department]] = mapped_column(
+        SQLEnum(
+            Department,
+            name="department_type",
+            validate_strings=True,
+            create_constraint=True,
+            values_callable=lambda obj: [e.value for e in obj]
+        ),
+        nullable=True,
+    )
 
     user = relationship("User", back_populates="professor")
 
@@ -206,7 +276,7 @@ class Professor(Base):
 class EmployeeProfile(Base):
     """
     Profile for employee users.
-    Employees are users who enroll in training sessions using codes from their company.
+    Employees can submit documents for approved company applications.
     """
     __tablename__ = "employee_profiles"
 
@@ -217,21 +287,32 @@ class EmployeeProfile(Base):
         unique=True,
         nullable=False,
     )
+    
+    # Link to company (if assigned)
+    company_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("companies.id", ondelete="SET NULL"),
+        nullable=True,
+    )
 
     user = relationship("User", back_populates="employee_profile")
+    company = relationship("Company", backref="employees")
 
-    # Session enrollments
-    session_enrollments = relationship(
-        "SessionEnrollment",
+    # Document submissions
+    submissions = relationship(
+        "EmployeeSubmission",
         back_populates="employee",
         cascade="all, delete-orphan",
     )
 
 
+# =============================================================================
+# COURSE MODELS (Static/Display Only)
+# =============================================================================
+
 class Course(Base):
     """
-    Course represents a training template/offering.
-    Dates and scheduling are handled via CourseAvailability slots.
+    Course represents a static training offering displayed on the landing page.
+    Courses are grouped by department and are purely informational.
     """
     __tablename__ = "courses"
 
@@ -255,16 +336,10 @@ class Course(Base):
     price: Mapped[float] = mapped_column(nullable=False)
     max_seats: Mapped[int] = mapped_column(nullable=False)
     
-    # Image storage (local filesystem path)
     image_path: Mapped[Optional[str]] = mapped_column(nullable=True)
-    
-    # Duration information (template info, not fixed dates)
     duration_hours: Mapped[Optional[int]] = mapped_column(nullable=True)
-    
-    # Industry sector for targeting
     sector: Mapped[Optional[str]] = mapped_column(nullable=True, index=True)
     
-    # Track who created the course (staff user)
     created_by_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -283,7 +358,6 @@ class Course(Base):
         nullable=False,
     )
     
-    # Published status
     is_published: Mapped[bool] = mapped_column(
         server_default="true",
         nullable=False,
@@ -292,39 +366,45 @@ class Course(Base):
     professor_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("professors.id", ondelete="SET NULL"),
     )
+    
+    department: Mapped[Optional[Department]] = mapped_column(
+        SQLEnum(
+            Department,
+            name="department_type",
+            validate_strings=True,
+            create_constraint=True,
+            values_callable=lambda obj: [e.value for e in obj]
+        ),
+        nullable=True,
+    )
+    
+    learning_outcomes: Mapped[Optional[List[str]]] = mapped_column(
+        JSONB,
+        nullable=True,
+        server_default="[]",
+    )
 
     professor = relationship("Professor", back_populates="courses")
     created_by = relationship("User", back_populates="created_courses")
-
-    requests = relationship(
-        "TrainingRequest",
+    
+    materials = relationship(
+        "CourseMaterial",
         back_populates="course",
-    )
-
-    enrollments = relationship(
-        "Enrollment",
-        back_populates="course",
-    )
-
-    enrollment_codes = relationship(
-        "EnrollmentCode",
-        back_populates="course",
+        cascade="all, delete-orphan",
     )
     
-    # Availability slots for this course
-    availability_slots = relationship(
-        "CourseAvailability",
+    feedback = relationship(
+        "CourseFeedback",
         back_populates="course",
         cascade="all, delete-orphan",
     )
 
 
-class CourseAvailability(Base):
+class CourseMaterial(Base):
     """
-    Represents a specific date slot when a course is available.
-    Companies book these slots, not courses directly.
+    Learning materials uploaded by professors for a course.
     """
-    __tablename__ = "course_availability"
+    __tablename__ = "course_materials"
 
     id: Mapped[int] = mapped_column(primary_key=True)
     
@@ -334,41 +414,168 @@ class CourseAvailability(Base):
         index=True,
     )
     
-    # Schedule information
-    start_date: Mapped[datetime] = mapped_column(
+    uploaded_by_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    
+    title: Mapped[str] = mapped_column(nullable=False)
+    description: Mapped[Optional[str]] = mapped_column(nullable=True)
+    
+    file_path: Mapped[str] = mapped_column(nullable=False)
+    file_name: Mapped[str] = mapped_column(nullable=False)
+    file_size: Mapped[int] = mapped_column(nullable=False)
+    file_type: Mapped[str] = mapped_column(nullable=False)
+    
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+    
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        onupdate=datetime.now,
+        nullable=False,
+    )
+    
+    course = relationship("Course", back_populates="materials")
+    uploaded_by = relationship("User")
+
+
+class CourseFeedback(Base):
+    """
+    Feedback submitted by employees for courses.
+    """
+    __tablename__ = "course_feedback"
+    __table_args__ = (
+        UniqueConstraint("course_id", "employee_id", name="uq_course_employee_feedback"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    course_id: Mapped[int] = mapped_column(
+        ForeignKey("courses.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    
+    employee_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("employee_profiles.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    
+    is_anonymous: Mapped[bool] = mapped_column(
+        server_default="false",
+        nullable=False,
+    )
+    
+    rating: Mapped[int] = mapped_column(nullable=False)
+    comment: Mapped[Optional[str]] = mapped_column(nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+    
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        onupdate=datetime.now,
+        nullable=False,
+    )
+    
+    course = relationship("Course", back_populates="feedback")
+    employee = relationship("EmployeeProfile", backref="feedback")
+
+
+# =============================================================================
+# CALL FOR APPLICANTS MODELS
+# =============================================================================
+
+class CallForApplicants(Base):
+    """
+    Represents a public call for companies to apply for training programs.
+    Published by Coordinators, visible on landing page.
+    """
+    __tablename__ = "calls_for_applicants"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    # Call identification
+    title: Mapped[str] = mapped_column(nullable=False)
+    reference_number: Mapped[str] = mapped_column(unique=True, nullable=False, index=True)
+    
+    # Department association
+    department: Mapped[Department] = mapped_column(
+        SQLEnum(
+            Department,
+            name="department_type",
+            validate_strings=True,
+            create_constraint=True,
+            values_callable=lambda obj: [e.value for e in obj]
+        ),
+        nullable=False,
+        index=True,
+    )
+    
+    # Call description and requirements
+    description: Mapped[str] = mapped_column(nullable=False)
+    eligibility_criteria: Mapped[Optional[str]] = mapped_column(nullable=True)
+    
+    # Required documents specification (JSON array)
+    # Example: [{"type": "convention", "label": "Convention signée", "required": true}]
+    required_documents: Mapped[List[dict]] = mapped_column(
+        JSONB,
+        nullable=False,
+    )
+    
+    # Employee required documents (for after admission)
+    # Example: [{"type": "cin", "label": "Carte d'identité", "required": true}]
+    employee_required_documents: Mapped[List[dict]] = mapped_column(
+        JSONB,
+        nullable=False,
+        server_default="[]",
+    )
+    
+    # Deadlines
+    application_start_date: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
     )
-    end_date: Mapped[datetime] = mapped_column(
+    application_deadline: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         nullable=False,
     )
-    schedule: Mapped[Optional[str]] = mapped_column(nullable=True)  # e.g., "Mon-Fri 9:00-17:00"
-    
-    # Seat management
-    max_seats: Mapped[int] = mapped_column(nullable=False)
-    min_seats: Mapped[int] = mapped_column(default=1, nullable=False)  # Recommended threshold
-    reserved_seats: Mapped[int] = mapped_column(default=0, nullable=False)  # Calculated from bookings
-    
-    # Booking deadline - after this, slot moves to pending_review
-    booking_deadline: Mapped[datetime] = mapped_column(
+    results_publication_date: Mapped[Optional[datetime]] = mapped_column(
         TIMESTAMP(timezone=True),
-        nullable=False,
+        nullable=True,
     )
     
     # Status management
-    status: Mapped[AvailabilitySlotStatus] = mapped_column(
+    status: Mapped[CallStatus] = mapped_column(
         SQLEnum(
-            AvailabilitySlotStatus,
-            name="availability_slot_status",
+            CallStatus,
+            name="call_status_type",
             validate_strings=True,
             create_constraint=True,
             values_callable=lambda obj: [e.value for e in obj]
         ),
         nullable=False,
-        server_default=AvailabilitySlotStatus.OPEN.value,
+        server_default=CallStatus.DRAFT.value,
+        index=True,
     )
     
+    # Creator tracking (Coordinator)
+    created_by_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    
+    # Timestamps
     created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         server_default=text("NOW()"),
@@ -382,31 +589,42 @@ class CourseAvailability(Base):
         nullable=False,
     )
     
-    # Relationships
-    course = relationship("Course", back_populates="availability_slots")
-    bookings = relationship(
-        "CompanyBooking",
-        back_populates="availability_slot",
-        cascade="all, delete-orphan",
+    published_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
     )
     
-    @property
-    def remaining_seats(self) -> int:
-        """Calculate remaining available seats"""
-        return self.max_seats - self.reserved_seats
+    # Relationships
+    created_by = relationship(
+        "User",
+        back_populates="created_calls",
+        foreign_keys=[created_by_id],
+    )
+    applications = relationship(
+        "CompanyApplication",
+        back_populates="call",
+        cascade="all, delete-orphan",
+    )
 
 
-class CompanyBooking(Base):
+class CompanyApplication(Base):
     """
-    Represents a company's booking for a specific course availability slot.
-    Bookings are atomic - all employees or none.
+    Company application to a specific Call for Applicants.
+    Tracks entire application lifecycle.
     """
-    __tablename__ = "company_bookings"
+    __tablename__ = "company_applications"
     __table_args__ = (
-        UniqueConstraint("company_id", "availability_slot_id", name="uq_company_slot_booking"),
+        UniqueConstraint("call_id", "company_id", name="uq_call_company_application"),
+        Index("ix_company_applications_status", "status"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
+    
+    call_id: Mapped[int] = mapped_column(
+        ForeignKey("calls_for_applicants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
     
     company_id: Mapped[int] = mapped_column(
         ForeignKey("companies.id", ondelete="CASCADE"),
@@ -414,35 +632,39 @@ class CompanyBooking(Base):
         index=True,
     )
     
-    availability_slot_id: Mapped[int] = mapped_column(
-        ForeignKey("course_availability.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-    
-    # Number of employees for this booking
-    employee_count: Mapped[int] = mapped_column(nullable=False)
-    
-    # Booking status
-    status: Mapped[BookingStatus] = mapped_column(
+    # Application status
+    status: Mapped[ApplicationStatus] = mapped_column(
         SQLEnum(
-            BookingStatus,
-            name="booking_status",
+            ApplicationStatus,
+            name="application_status_type",
             validate_strings=True,
             create_constraint=True,
             values_callable=lambda obj: [e.value for e in obj]
         ),
         nullable=False,
-        server_default=BookingStatus.RESERVED.value,
+        server_default=ApplicationStatus.SUBMITTED.value,
     )
     
-    # Notes from company (optional)
-    notes: Mapped[Optional[str]] = mapped_column(nullable=True)
+    # Company notes/motivation
+    motivation_letter: Mapped[Optional[str]] = mapped_column(nullable=True)
     
-    # Staff notes (for internal use)
-    staff_notes: Mapped[Optional[str]] = mapped_column(nullable=True)
+    # Number of employees to be trained
+    proposed_employee_count: Mapped[int] = mapped_column(nullable=False)
     
-    created_at: Mapped[datetime] = mapped_column(
+    # Coordinator decision fields
+    coordinator_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    decision_date: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    decision_notes: Mapped[Optional[str]] = mapped_column(nullable=True)
+    rejection_reason: Mapped[Optional[str]] = mapped_column(nullable=True)
+    
+    # Timestamps
+    submitted_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         server_default=text("NOW()"),
         nullable=False,
@@ -456,185 +678,63 @@ class CompanyBooking(Base):
     )
     
     # Relationships
-    company = relationship("Company", backref="bookings")
-    availability_slot = relationship("CourseAvailability", back_populates="bookings")
-
-
-class TrainingRequest(Base):
-    __tablename__ = "training_requests"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    company_id: Mapped[int] = mapped_column(
-        ForeignKey("companies.id", ondelete="CASCADE"),
-        nullable=False,
+    call = relationship("CallForApplicants", back_populates="applications")
+    company = relationship("Company", back_populates="applications")
+    coordinator = relationship(
+        "User",
+        foreign_keys=[coordinator_id],
+        backref="reviewed_applications",
     )
-
-    course_id: Mapped[Optional[int]] = mapped_column(
-        ForeignKey("courses.id", ondelete="SET NULL"),
+    documents = relationship(
+        "ApplicationDocument",
+        back_populates="application",
+        cascade="all, delete-orphan",
     )
-
-    requested_topic: Mapped[Optional[str]]
-    employees_count: Mapped[int] = mapped_column(nullable=False)
-
-    status: Mapped[RequestStatus] = mapped_column(
-        SQLEnum(
-            RequestStatus,
-            name="request_status",
-            validate_strings=True,
-            create_constraint=True,
-            values_callable=lambda obj: [e.value for e in obj]
-        ),
-        nullable=False,
-        server_default=RequestStatus.PENDING.value,
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True),
-        server_default=text("NOW()"),
-        nullable=False,
-    )
-
-    company = relationship("Company", back_populates="requests")
-    course = relationship("Course", back_populates="requests")
-
-
-class SessionEnrollmentCode(Base):
-    """
-    Enrollment code for a specific session, generated when staff confirms the session.
-    One code per company per session.
-    """
-    __tablename__ = "session_enrollment_codes"
-    __table_args__ = (
-        UniqueConstraint("availability_slot_id", "company_id", name="uq_session_company_code"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    code: Mapped[str] = mapped_column(unique=True, nullable=False, index=True)
-
-    availability_slot_id: Mapped[int] = mapped_column(
-        ForeignKey("course_availability.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
-    company_id: Mapped[int] = mapped_column(
-        ForeignKey("companies.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
-    # Linked booking
-    booking_id: Mapped[int] = mapped_column(
-        ForeignKey("company_bookings.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
-    max_usage: Mapped[int] = mapped_column(nullable=False)
-    used_count: Mapped[int] = mapped_column(server_default="0", nullable=False)
-
-    expires_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True),
-        nullable=False,
-    )
-
-    created_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True),
-        server_default=text("NOW()"),
-        nullable=False,
-    )
-
-    # Relationships
-    availability_slot = relationship("CourseAvailability", backref="enrollment_codes")
-    company = relationship("Company", backref="session_enrollment_codes")
-    booking = relationship("CompanyBooking", backref="enrollment_code")
-
-
-class SessionEnrollment(Base):
-    """
-    Employee enrollment for a specific session.
-    Created when an employee uses an enrollment code.
-    """
-    __tablename__ = "session_enrollments"
-    __table_args__ = (
-        UniqueConstraint("employee_id", "availability_slot_id", name="uq_employee_session_enrollment"),
-    )
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    employee_id: Mapped[int] = mapped_column(
-        ForeignKey("employee_profiles.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
-    availability_slot_id: Mapped[int] = mapped_column(
-        ForeignKey("course_availability.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True,
-    )
-
-    # Link to the company via enrollment code
-    enrollment_code_id: Mapped[int] = mapped_column(
-        ForeignKey("session_enrollment_codes.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
-    enrolled_at: Mapped[datetime] = mapped_column(
-        TIMESTAMP(timezone=True),
-        server_default=text("NOW()"),
-        nullable=False,
-    )
-
-    # Relationships
-    employee = relationship("EmployeeProfile", back_populates="session_enrollments")
-    availability_slot = relationship("CourseAvailability", backref="session_enrollments")
-    enrollment_code = relationship("SessionEnrollmentCode", backref="enrollments")
-
-    # Document
-    document = relationship(
-        "EmployeeDocument",
-        back_populates="enrollment",
-        uselist=False,
+    employee_submissions = relationship(
+        "EmployeeSubmission",
+        back_populates="company_application",
         cascade="all, delete-orphan",
     )
 
 
-class EmployeeDocument(Base):
+class ApplicationDocument(Base):
     """
-    Identity document uploaded by an employee for a specific enrollment.
-    Required for attendance verification.
+    Document uploaded by a company as part of their application.
     """
-    __tablename__ = "employee_documents"
+    __tablename__ = "application_documents"
 
     id: Mapped[int] = mapped_column(primary_key=True)
-
-    enrollment_id: Mapped[int] = mapped_column(
-        ForeignKey("session_enrollments.id", ondelete="CASCADE"),
-        unique=True,
+    
+    application_id: Mapped[int] = mapped_column(
+        ForeignKey("company_applications.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
-
-    # Document info
-    document_type: Mapped[str] = mapped_column(nullable=False)  # 'cin' or 'passport'
+    
+    # Document type (matches required_documents from Call)
+    document_type: Mapped[str] = mapped_column(nullable=False)
+    document_label: Mapped[str] = mapped_column(nullable=False)
+    
+    # File storage
     file_path: Mapped[str] = mapped_column(nullable=False)
     original_filename: Mapped[str] = mapped_column(nullable=False)
-
+    file_size: Mapped[int] = mapped_column(nullable=False)
+    mime_type: Mapped[str] = mapped_column(nullable=False)
+    
     # Review status
-    status: Mapped[DocumentStatus] = mapped_column(
+    review_status: Mapped[DocumentReviewStatus] = mapped_column(
         SQLEnum(
-            DocumentStatus,
-            name="document_status",
+            DocumentReviewStatus,
+            name="document_review_status_type",
             validate_strings=True,
             create_constraint=True,
             values_callable=lambda obj: [e.value for e in obj]
         ),
         nullable=False,
-        server_default=DocumentStatus.PENDING_REVIEW.value,
+        server_default=DocumentReviewStatus.PENDING.value,
     )
-
-    # Staff review info
+    
+    # Review details
     reviewed_by_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
@@ -643,78 +743,171 @@ class EmployeeDocument(Base):
         TIMESTAMP(timezone=True),
         nullable=True,
     )
-    rejection_reason: Mapped[Optional[str]] = mapped_column(nullable=True)
-
+    review_notes: Mapped[Optional[str]] = mapped_column(nullable=True)
+    
+    # Timestamps
     uploaded_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         server_default=text("NOW()"),
         nullable=False,
     )
-
+    
     # Relationships
-    enrollment = relationship("SessionEnrollment", back_populates="document")
-    reviewed_by = relationship("User", backref="reviewed_documents")
+    application = relationship("CompanyApplication", back_populates="documents")
+    reviewed_by = relationship("User", backref="reviewed_app_documents")
 
 
-# Keep legacy EnrollmentCode for backwards compatibility but mark as deprecated
-class EnrollmentCode(Base):
-    """DEPRECATED: Use SessionEnrollmentCode instead"""
-    __tablename__ = "enrollment_codes"
+# =============================================================================
+# EMPLOYEE SUBMISSION MODELS
+# =============================================================================
 
-    id: Mapped[int] = mapped_column(primary_key=True)
-
-    code: Mapped[str] = mapped_column(unique=True, nullable=False)
-
-    course_id: Mapped[int] = mapped_column(
-        ForeignKey("courses.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
-    company_id: Mapped[int] = mapped_column(
-        ForeignKey("companies.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-
-    max_usage: Mapped[int] = mapped_column(nullable=False)
-    used_count: Mapped[int] = mapped_column(server_default="0", nullable=False)
-
-    expires_at: Mapped[datetime] = mapped_column(nullable=False)
-
-    course = relationship("Course", back_populates="enrollment_codes")
-    company = relationship("Company", back_populates="enrollment_codes")
-
-class Enrollment(Base):
-    __tablename__ = "enrollments"
+class EmployeeSubmission(Base):
+    """
+    Employee document submission for an admitted company.
+    Only available after company application is approved.
+    """
+    __tablename__ = "employee_submissions"
     __table_args__ = (
-        UniqueConstraint("employee_id", "course_id"),
+        UniqueConstraint(
+            "company_application_id", "employee_id",
+            name="uq_application_employee_submission"
+        ),
+        Index("ix_employee_submissions_status", "status"),
     )
 
     id: Mapped[int] = mapped_column(primary_key=True)
-
+    
+    company_application_id: Mapped[int] = mapped_column(
+        ForeignKey("company_applications.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    
     employee_id: Mapped[int] = mapped_column(
-        ForeignKey("employees.id", ondelete="CASCADE"),
+        ForeignKey("employee_profiles.id", ondelete="CASCADE"),
         nullable=False,
+        index=True,
     )
-
-    course_id: Mapped[int] = mapped_column(
-        ForeignKey("courses.id", ondelete="CASCADE"),
+    
+    # Submission status
+    status: Mapped[EmployeeSubmissionStatus] = mapped_column(
+        SQLEnum(
+            EmployeeSubmissionStatus,
+            name="employee_submission_status_type",
+            validate_strings=True,
+            create_constraint=True,
+            values_callable=lambda obj: [e.value for e in obj]
+        ),
         nullable=False,
+        server_default=EmployeeSubmissionStatus.PENDING.value,
     )
-
-    enrolled_at: Mapped[datetime] = mapped_column(
+    
+    # Review details
+    reviewed_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    review_notes: Mapped[Optional[str]] = mapped_column(nullable=True)
+    
+    # Timestamps
+    created_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         server_default=text("NOW()"),
         nullable=False,
     )
+    
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        onupdate=datetime.now,
+        nullable=False,
+    )
+    
+    # Relationships
+    company_application = relationship(
+        "CompanyApplication",
+        back_populates="employee_submissions",
+    )
+    employee = relationship("EmployeeProfile", back_populates="submissions")
+    reviewed_by = relationship("User", backref="reviewed_employee_submissions")
+    documents = relationship(
+        "EmployeeSubmissionDocument",
+        back_populates="submission",
+        cascade="all, delete-orphan",
+    )
 
-    employee = relationship("Employee", back_populates="enrollments")
-    course = relationship("Course", back_populates="enrollments")
 
+class EmployeeSubmissionDocument(Base):
+    """
+    Document uploaded by an employee for their submission.
+    """
+    __tablename__ = "employee_submission_documents"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    submission_id: Mapped[int] = mapped_column(
+        ForeignKey("employee_submissions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    
+    # Document type (matches employee_required_documents from Call)
+    document_type: Mapped[str] = mapped_column(nullable=False)
+    document_label: Mapped[str] = mapped_column(nullable=False)
+    
+    # File storage
+    file_path: Mapped[str] = mapped_column(nullable=False)
+    original_filename: Mapped[str] = mapped_column(nullable=False)
+    file_size: Mapped[int] = mapped_column(nullable=False)
+    mime_type: Mapped[str] = mapped_column(nullable=False)
+    
+    # Review status
+    review_status: Mapped[DocumentReviewStatus] = mapped_column(
+        SQLEnum(
+            DocumentReviewStatus,
+            name="document_review_status_type",
+            validate_strings=True,
+            create_constraint=True,
+            values_callable=lambda obj: [e.value for e in obj]
+        ),
+        nullable=False,
+        server_default=DocumentReviewStatus.PENDING.value,
+    )
+    
+    # Review details
+    reviewed_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+    reviewed_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    review_notes: Mapped[Optional[str]] = mapped_column(nullable=True)
+    
+    # Timestamps
+    uploaded_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+    
+    # Relationships
+    submission = relationship("EmployeeSubmission", back_populates="documents")
+    reviewed_by = relationship("User", backref="reviewed_emp_docs")
+
+
+# =============================================================================
+# NEWSLETTER & NEWS MODELS
+# =============================================================================
 
 class NewsletterSubscription(Base):
     """
     Newsletter subscription model for sector-targeted campaigns.
-    Allows both authenticated company users and public users to subscribe.
     """
     __tablename__ = "newsletter_subscriptions"
     __table_args__ = (
@@ -726,13 +919,11 @@ class NewsletterSubscription(Base):
     email: Mapped[str] = mapped_column(unique=True, nullable=False, index=True)
     sector: Mapped[str] = mapped_column(nullable=False, index=True)
     
-    # Optional link to company (if authenticated user)
     company_id: Mapped[Optional[int]] = mapped_column(
         ForeignKey("companies.id", ondelete="SET NULL"),
         nullable=True,
     )
     
-    # Subscription status
     is_active: Mapped[bool] = mapped_column(
         server_default="true",
         nullable=False,
@@ -750,3 +941,97 @@ class NewsletterSubscription(Base):
     )
 
     company = relationship("Company", backref="newsletter_subscriptions")
+
+
+class News(Base):
+    """
+    News/Announcement model for the landing page.
+    """
+    __tablename__ = "news"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    title: Mapped[str] = mapped_column(nullable=False)
+    content: Mapped[str] = mapped_column(nullable=False)
+    excerpt: Mapped[Optional[str]] = mapped_column(nullable=True)
+    
+    image_path: Mapped[Optional[str]] = mapped_column(nullable=True)
+    
+    created_by_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    
+    is_published: Mapped[bool] = mapped_column(
+        server_default="true",
+        nullable=False,
+    )
+    
+    is_featured: Mapped[bool] = mapped_column(
+        server_default="false",
+        nullable=False,
+    )
+    
+    published_at: Mapped[Optional[datetime]] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=True,
+    )
+    
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+    
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        onupdate=datetime.now,
+        nullable=False,
+    )
+    
+    created_by = relationship("User", backref="created_news")
+
+
+# =============================================================================
+# AUDIT & TRACEABILITY
+# =============================================================================
+
+class AuditLog(Base):
+    """
+    Audit log for traceability of all critical actions.
+    """
+    __tablename__ = "audit_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    
+    # Actor
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    user_role: Mapped[str] = mapped_column(nullable=False)
+    
+    # Action
+    action: Mapped[str] = mapped_column(nullable=False, index=True)
+    entity_type: Mapped[str] = mapped_column(nullable=False, index=True)
+    entity_id: Mapped[int] = mapped_column(nullable=False)
+    
+    # Details
+    old_values: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    new_values: Mapped[Optional[dict]] = mapped_column(JSONB, nullable=True)
+    notes: Mapped[Optional[str]] = mapped_column(nullable=True)
+    
+    # Metadata
+    ip_address: Mapped[Optional[str]] = mapped_column(nullable=True)
+    
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+        index=True,
+    )
+    
+    # Relationships
+    user = relationship("User", backref="audit_logs")

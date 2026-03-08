@@ -98,6 +98,9 @@ class RoleChecker:
 require_staff = RoleChecker([UserRole.STAFF, UserRole.ADMIN])
 require_admin = RoleChecker([UserRole.ADMIN])
 require_professor = RoleChecker([UserRole.PROFESSOR, UserRole.ADMIN])
+require_coordinator = RoleChecker([UserRole.COORDINATOR, UserRole.ADMIN])
+require_company = RoleChecker([UserRole.COMPANY])
+require_employee = RoleChecker([UserRole.EMPLOYEE])
 require_company = RoleChecker([UserRole.COMPANY])
 
 

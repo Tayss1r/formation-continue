@@ -1,12 +1,16 @@
 from datetime import datetime, timedelta
 import random
 import logging
-from fastapi import APIRouter, Cookie, Depends, HTTPException, Request
+import os
+import uuid
+import aiofiles
+from fastapi import APIRouter, Cookie, Depends, HTTPException, Request, UploadFile, File, Form
 from fastapi.responses import JSONResponse, RedirectResponse
 import httpx
 from itsdangerous import BadSignature, SignatureExpired
 from starlette import status
 from sqlalchemy.ext.asyncio.session import AsyncSession
+from sqlalchemy import select
 
 from ..celery_tasks import send_email
 from ..core.config import settings
@@ -209,6 +213,68 @@ async def signup(signup_data: SignupRequest, session: AsyncSession = Depends(get
     )
 
 
+# ==================== VERIFICATION DOCUMENT UPLOAD ====================
+
+UPLOADS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), "uploads", "verifications")
+
+@auth_router.post("/upload-verification-document")
+async def upload_verification_document(
+    email: str = Form(...),
+    document: UploadFile = File(...),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Upload verification document for company or professor registration.
+    This should be called after initial signup.
+    
+    Accepts PDF, JPEG, PNG files up to 10MB.
+    """
+    # Find user by email
+    query = select(User).where(User.email == email)
+    result = await session.execute(query)
+    user = result.scalar_one_or_none()
+    
+    if not user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not found"
+        )
+    
+    # Validate file type
+    allowed_types = ["application/pdf", "image/jpeg", "image/png", "image/jpg"]
+    if document.content_type not in allowed_types:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid file type. Allowed: PDF, JPEG, PNG"
+        )
+    
+    # Validate file size (10MB max)
+    contents = await document.read()
+    if len(contents) > 10 * 1024 * 1024:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="File too large. Maximum size is 10MB"
+        )
+    
+    # Create uploads directory if it doesn't exist
+    os.makedirs(UPLOADS_DIR, exist_ok=True)
+    
+    # Generate unique filename
+    ext = document.filename.split(".")[-1] if document.filename else "pdf"
+    filename = f"{uuid.uuid4()}.{ext}"
+    filepath = os.path.join(UPLOADS_DIR, filename)
+    
+    # Save file
+    async with aiofiles.open(filepath, "wb") as f:
+        await f.write(contents)
+    
+    # Update user record
+    user.verification_document = filename
+    await session.commit()
+    
+    return {"message": "Document uploaded successfully", "filename": filename}
+
+
 # ==================== LOGIN ====================
 
 @auth_router.post("/login", response_model=LoginResponse)
@@ -218,9 +284,12 @@ async def login(login_data: LoginRequest, session: AsyncSession = Depends(get_se
     
     - Validates email and password
     - Rejects if email not verified
+    - Rejects if account is pending/rejected/blocked
     - Returns access token in body
     - Sets refresh token in HttpOnly cookie
     """
+    from ..db.models import AccountStatus
+    
     email = login_data.email
     password = login_data.password
 
@@ -234,6 +303,33 @@ async def login(login_data: LoginRequest, session: AsyncSession = Depends(get_se
     
     if not user.is_verified:
         raise AccountNotVerified()
+    
+    # Check account status for companies and professors
+    if hasattr(user, 'account_status'):
+        if user.account_status == AccountStatus.PENDING:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "message": "Votre compte est en attente d'approbation. Vous serez notifié par email une fois approuvé.",
+                    "error_code": "account_pending"
+                }
+            )
+        elif user.account_status == AccountStatus.REJECTED:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "message": "Votre demande de compte a été rejetée. Contactez-nous pour plus d'informations.",
+                    "error_code": "account_rejected"
+                }
+            )
+        elif user.account_status == AccountStatus.BLOCKED:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail={
+                    "message": "Votre compte a été bloqué. Contactez l'administration.",
+                    "error_code": "account_blocked"
+                }
+            )
     
     return create_auth_response(user, "Login successful")
 

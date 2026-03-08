@@ -6,9 +6,15 @@ from contextlib import asynccontextmanager
 
 from .api.courses import course_router
 from .api.newsletter import newsletter_router
-from .api.availability import availability_router
-from .api.booking import booking_router
-from .api.enrollment import enrollment_router
+from .api.calls import calls_router
+from .api.applications import applications_router
+from .api.submissions import submissions_router
+from .api.coordinator import coordinator_router
+from .api.professor import professor_router
+from .api.materials import materials_router
+from .api.news import news_router
+from .api.admin import admin_router
+from .api.feedback import feedback_router
 from .middleware import register_middleware
 
 from .error import register_all_errors
@@ -31,6 +37,7 @@ async def lifespan(app: FastAPI):
     
     # Create upload directories if they don't exist
     os.makedirs(settings.COURSES_UPLOAD_DIR, exist_ok=True)
+    os.makedirs("uploads/verifications", exist_ok=True)
     logger.info(f"Upload directory ensured: {settings.COURSES_UPLOAD_DIR}")
     
     yield
@@ -57,6 +64,12 @@ app.mount("/uploads", StaticFiles(directory="uploads"), name="uploads")
 app.include_router(auth_router, prefix=f"/api/{API_VERSION}/auth", tags=['Authentication'])
 app.include_router(course_router, prefix=f"/api/{API_VERSION}/courses", tags=['Courses'])
 app.include_router(newsletter_router, prefix=f"/api/{API_VERSION}/newsletter", tags=['Newsletter'])
-app.include_router(availability_router, prefix=f"/api/{API_VERSION}/availability", tags=['Availability'])
-app.include_router(booking_router, prefix=f"/api/{API_VERSION}/bookings", tags=['Bookings'])
-app.include_router(enrollment_router, prefix=f"/api/{API_VERSION}/enrollment", tags=['Enrollment'])
+app.include_router(calls_router, prefix=f"/api/{API_VERSION}/calls", tags=['Calls for Applicants'])
+app.include_router(applications_router, prefix=f"/api/{API_VERSION}/applications", tags=['Company Applications'])
+app.include_router(submissions_router, prefix=f"/api/{API_VERSION}/submissions", tags=['Employee Submissions'])
+app.include_router(coordinator_router, prefix=f"/api/{API_VERSION}/coordinator", tags=['Coordinator Dashboard'])
+app.include_router(professor_router, prefix=f"/api/{API_VERSION}/professor", tags=['Professor'])
+app.include_router(materials_router, prefix=f"/api/{API_VERSION}/materials", tags=['Materials'])
+app.include_router(news_router, prefix=f"/api/{API_VERSION}/news", tags=['News'])
+app.include_router(admin_router, prefix=f"/api/{API_VERSION}/admin", tags=['Admin'])
+app.include_router(feedback_router, prefix=f"/api/{API_VERSION}/feedback", tags=['Feedback'])

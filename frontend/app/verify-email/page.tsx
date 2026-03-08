@@ -128,13 +128,13 @@ function VerifyEmailContent() {
           <div className="w-20 h-20 rounded-2xl bg-green-500/10 border border-green-500/20 flex items-center justify-center mx-auto mb-6 animate-in zoom-in duration-300">
             <CheckCircle2 className="w-10 h-10 text-green-500" />
           </div>
-          <h2 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+          <h2 className="text-xl font-semibold text-foreground mb-2">
             Félicitations !
           </h2>
-          <p className="text-slate-500 dark:text-slate-400 mb-6">
+          <p className="text-muted-foreground mb-6">
             Votre email a été vérifié avec succès. Redirection vers la page de connexion...
           </p>
-          <Loader2 className="w-6 h-6 animate-spin text-purple-500 mx-auto" />
+          <Loader2 className="w-6 h-6 animate-spin text-primary-500 mx-auto" />
         </div>
       </AuthLayout>
     );
@@ -153,13 +153,13 @@ function VerifyEmailContent() {
 
       {/* Email display */}
       <div className="text-center mb-6">
-        <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-indigo-500/10 via-purple-500/10 to-pink-500/10 border border-purple-500/20 flex items-center justify-center mx-auto mb-4">
-          <Mail className="w-8 h-8 text-purple-500" />
+        <div className="icon-box w-16 h-16 bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-500/20 mx-auto mb-4">
+          <Mail className="w-8 h-8 text-primary-500" />
         </div>
-        <p className="text-slate-500 dark:text-slate-400">
+        <p className="text-muted-foreground">
           Code envoyé à
         </p>
-        <p className="text-purple-500 font-medium">
+        <p className="text-primary-500 font-medium">
           {email || "votre adresse email"}
         </p>
       </div>
@@ -180,11 +180,11 @@ function VerifyEmailContent() {
               value={digit}
               onChange={(e) => handleInputChange(index, e.target.value)}
               onKeyDown={(e) => handleKeyDown(index, e)}
-              className={`w-12 h-14 text-center text-xl font-bold rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
+              className={`w-12 h-14 text-center text-xl font-bold rounded-xl bg-muted border ${
                 error
                   ? "border-red-500"
-                  : "border-slate-200 dark:border-slate-700"
-              } text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all`}
+                  : "border-border"
+              } text-foreground focus:outline-none focus:ring-2 focus:ring-primary-500/50 focus:border-primary-500 transition-all`}
             />
           ))}
         </div>
@@ -198,7 +198,7 @@ function VerifyEmailContent() {
         <button
           type="submit"
           disabled={isLoading || code.join("").length !== 6}
-          className="w-full py-3.5 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25"
+          className="btn-primary w-full py-3.5 shadow-lg shadow-primary-500/25"
         >
           {isLoading ? (
             <>
@@ -212,14 +212,14 @@ function VerifyEmailContent() {
 
         {/* Resend code */}
         <div className="mt-6 text-center">
-          <p className="text-sm text-slate-500 dark:text-slate-400 mb-2">
+          <p className="text-sm text-muted-foreground mb-2">
             Vous n&apos;avez pas reçu le code ?
           </p>
           <button
             type="button"
             onClick={handleResendCode}
             disabled={isResending || resendCooldown > 0}
-            className="inline-flex items-center gap-2 text-sm text-purple-500 hover:text-purple-400 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            className="inline-flex items-center gap-2 text-sm text-primary-500 hover:text-primary-600 font-medium disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
           >
             {isResending ? (
               <>
@@ -242,7 +242,7 @@ function VerifyEmailContent() {
       </form>
 
       {/* Help text */}
-      <p className="text-center text-sm text-slate-500 dark:text-slate-400 mt-6">
+      <p className="text-center text-sm text-muted-foreground mt-6">
         Vérifiez votre dossier spam si vous ne voyez pas l&apos;email.
       </p>
     </AuthLayout>
@@ -254,7 +254,7 @@ export default function VerifyEmailPage() {
     <Suspense
       fallback={
         <div className="min-h-screen bg-slate-50 dark:bg-[#020817] flex items-center justify-center">
-          <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+          <Loader2 className="w-8 h-8 animate-spin text-primary-500" />
         </div>
       }
     >

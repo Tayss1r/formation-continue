@@ -6,8 +6,6 @@ import Link from "next/link";
 import {
   Mail,
   Lock,
-  Eye,
-  EyeOff,
   Loader2,
   AlertCircle,
   User,
@@ -21,8 +19,11 @@ import {
   FileText,
   BookOpen,
   Users,
+  Upload,
+  ShieldAlert,
 } from "lucide-react";
 import AuthLayout from "@/components/auth/AuthLayout";
+import FormInput, { FormTextarea, FileUpload } from "@/components/ui/FormInput";
 import { apiClient } from "@/lib/api";
 
 type UserRole = "company" | "professor" | "employee";
@@ -41,6 +42,8 @@ interface SignupData {
   billing_info: string;
   // Professor fields
   specialization: string;
+  // Document upload
+  verificationDocument: File | null;
 }
 
 const initialData: SignupData = {
@@ -55,6 +58,7 @@ const initialData: SignupData = {
   industry_sector: "",
   billing_info: "",
   specialization: "",
+  verificationDocument: null,
 };
 
 // Staff role removed from public signup - staff accounts created by admin only
@@ -65,20 +69,29 @@ const roleOptions = [
     description: "Inscrivez votre entreprise pour former vos employés",
     icon: Building2,
     color: "from-emerald-500 to-teal-500",
+    requiresDocument: true,
+    documentLabel: "Document d'enregistrement légal",
+    documentHint: "Registre de commerce, SIRET, ou tout document officiel prouvant l'existence légale de votre entreprise",
   },
   {
     value: "professor" as UserRole,
     label: "Professeur",
     description: "Rejoignez notre équipe de formateurs",
     icon: GraduationCap,
-    color: "from-purple-500 to-pink-500",
+    color: "from-primary-500 to-primary-600",
+    requiresDocument: true,
+    documentLabel: "Diplôme ou certification",
+    documentHint: "Diplôme universitaire, certification professionnelle, ou contrat de travail académique",
   },
   {
     value: "employee" as UserRole,
     label: "Employé",
     description: "Inscrivez-vous pour participer aux formations de votre entreprise",
     icon: Users,
-    color: "from-blue-500 to-cyan-500",
+    color: "from-primary-400 to-primary-600",
+    requiresDocument: false,
+    documentLabel: "",
+    documentHint: "",
   },
 ];
 
@@ -86,13 +99,13 @@ export default function SignupPage() {
   const router = useRouter();
   const [step, setStep] = useState(1);
   const [data, setData] = useState<SignupData>(initialData);
-  const [showPassword, setShowPassword] = useState(false);
-  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const updateField = (field: keyof SignupData, value: string) => {
+  const selectedRole = roleOptions.find((r) => r.value === data.role);
+
+  const updateField = (field: keyof SignupData, value: string | File | null) => {
     setData((prev) => ({ ...prev, [field]: value }));
     setFieldErrors((prev) => ({ ...prev, [field]: "" }));
     setError("");
@@ -126,6 +139,7 @@ export default function SignupPage() {
       else if (data.username.length < 3) {
         errors.username = "Le nom d'utilisateur doit contenir au moins 3 caractères";
       }
+      if (!data.specialization) errors.specialization = "La spécialisation est requise";
     }
 
     if (data.role === "company") {
@@ -134,8 +148,9 @@ export default function SignupPage() {
       if (!data.billing_info) errors.billing_info = "Les informations de facturation sont requises";
     }
 
-    if (data.role === "professor") {
-      if (!data.specialization) errors.specialization = "La spécialisation est requise";
+    // Document validation for company and professor
+    if (selectedRole?.requiresDocument && !data.verificationDocument) {
+      errors.verificationDocument = "Le document de vérification est obligatoire";
     }
 
     setFieldErrors(errors);
@@ -149,29 +164,40 @@ export default function SignupPage() {
     setError("");
 
     try {
-      const payload: Record<string, unknown> = {
+      // Step 1: Create user account (JSON request)
+      const signupData: Record<string, string> = {
         role: data.role,
         email: data.email,
         password: data.password,
         fullname: data.fullname,
-        phone: data.phone || undefined,
       };
 
+      if (data.phone) signupData.phone = data.phone;
+
       if (data.role === "professor") {
-        payload.username = data.username;
+        signupData.username = data.username;
+        signupData.specialization = data.specialization;
       }
 
       if (data.role === "company") {
-        payload.company_name = data.company_name;
-        payload.industry_sector = data.industry_sector;
-        payload.billing_info = data.billing_info;
+        signupData.company_name = data.company_name;
+        signupData.industry_sector = data.industry_sector;
+        signupData.billing_info = data.billing_info;
       }
 
-      if (data.role === "professor") {
-        payload.specialization = data.specialization;
-      }
+      await apiClient.post("/auth/signup", signupData);
 
-      await apiClient.post("/auth/signup", payload);
+      // Step 2: Upload verification document if required
+      if (data.verificationDocument && selectedRole?.requiresDocument) {
+        const formData = new FormData();
+        formData.append("email", data.email);
+        formData.append("document", data.verificationDocument);
+
+        await fetch(`${process.env.NEXT_PUBLIC_API_URL}/auth/upload-verification-document`, {
+          method: "POST",
+          body: formData,
+        });
+      }
 
       // Redirect to verification page
       router.push(`/verify-email?email=${encodeURIComponent(data.email)}`);
@@ -199,7 +225,7 @@ export default function SignupPage() {
 
   return (
     <AuthLayout
-      title={step === 1 ? "Créer un compte" : `Inscription ${roleOptions.find((r) => r.value === data.role)?.label}`}
+      title={step === 1 ? "Créer un compte" : `Inscription ${selectedRole?.label}`}
       subtitle={step === 1 ? "Choisissez votre type de compte" : "Remplissez vos informations"}
     >
       {/* Progress Steps */}
@@ -207,22 +233,22 @@ export default function SignupPage() {
         <div
           className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
             step >= 1
-              ? "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white"
-              : "bg-slate-200 dark:bg-slate-700 text-slate-500"
+              ? "gradient-primary text-white"
+              : "bg-muted text-muted-foreground"
           }`}
         >
           {step > 1 ? <Check className="w-4 h-4" /> : "1"}
         </div>
         <div
           className={`w-16 h-1 rounded-full transition-all ${
-            step >= 2 ? "bg-gradient-to-r from-purple-500 to-pink-500" : "bg-slate-200 dark:bg-slate-700"
+            step >= 2 ? "gradient-primary" : "bg-muted"
           }`}
         />
         <div
           className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
             step >= 2
-              ? "bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white"
-              : "bg-slate-200 dark:bg-slate-700 text-slate-500"
+              ? "gradient-primary text-white"
+              : "bg-muted text-muted-foreground"
           }`}
         >
           2
@@ -244,10 +270,10 @@ export default function SignupPage() {
             <button
               key={role.value}
               onClick={() => updateField("role", role.value)}
-              className={`w-full p-4 rounded-xl border-2 transition-all text-left flex items-center gap-4 group ${
+              className={`w-full p-4 rounded-xl border-2 transition-all text-left flex items-start gap-4 group ${
                 data.role === role.value
-                  ? "border-purple-500 bg-purple-50 dark:bg-purple-900/20"
-                  : "border-slate-200 dark:border-slate-700 hover:border-purple-300 dark:hover:border-purple-700"
+                  ? "border-primary-500 bg-primary-50 dark:bg-primary-900/20"
+                  : "border-border hover:border-primary-300 dark:hover:border-primary-700"
               }`}
             >
               <div
@@ -255,15 +281,28 @@ export default function SignupPage() {
               >
                 <role.icon className="w-6 h-6 text-white" />
               </div>
-              <div className="flex-1">
-                <h3 className="font-semibold text-slate-900 dark:text-white">{role.label}</h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400">{role.description}</p>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-semibold text-foreground">{role.label}</h3>
+                  {role.requiresDocument && (
+                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                      <ShieldAlert className="w-3 h-3" />
+                      Vérification
+                    </span>
+                  )}
+                </div>
+                <p className="text-sm text-muted-foreground mt-0.5">{role.description}</p>
+                {role.requiresDocument && (
+                  <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                    Document requis pour validation
+                  </p>
+                )}
               </div>
               <div
-                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all ${
+                className={`w-5 h-5 rounded-full border-2 flex items-center justify-center transition-all flex-shrink-0 mt-1 ${
                   data.role === role.value
-                    ? "border-purple-500 bg-purple-500"
-                    : "border-slate-300 dark:border-slate-600"
+                    ? "border-primary-500 bg-primary-500"
+                    : "border-muted-foreground/30"
                 }`}
               >
                 {data.role === role.value && <Check className="w-3 h-3 text-white" />}
@@ -274,7 +313,7 @@ export default function SignupPage() {
           <button
             onClick={goToStep2}
             disabled={!data.role}
-            className="w-full py-3.5 mt-4 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25"
+            className="btn-primary w-full h-12 mt-4 flex items-center justify-center gap-2"
           >
             Continuer
             <ArrowRight className="w-5 h-5" />
@@ -289,271 +328,185 @@ export default function SignupPage() {
             e.preventDefault();
             handleSubmit();
           }}
-          className="space-y-4 animate-in fade-in duration-300"
+          className="space-y-5 animate-in fade-in duration-300"
         >
           {/* Back Button */}
           <button
             type="button"
             onClick={goBack}
-            className="flex items-center gap-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 text-sm transition-colors mb-4"
+            className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm transition-colors mb-2"
           >
             <ArrowLeft className="w-4 h-4" />
             Retour au choix du rôle
           </button>
 
+          {/* Verification Notice for Company/Professor */}
+          {selectedRole?.requiresDocument && (
+            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 rounded-xl border border-amber-200 dark:border-amber-800">
+              <div className="flex items-start gap-3">
+                <ShieldAlert className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-sm font-medium text-amber-800 dark:text-amber-300">
+                    Vérification requise
+                  </p>
+                  <p className="text-sm text-amber-700 dark:text-amber-400 mt-1">
+                    Votre compte sera en attente d&apos;approbation jusqu&apos;à ce que notre équipe vérifie vos documents. 
+                    Vous recevrez un email une fois votre compte activé.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Employee info message */}
           {data.role === "employee" && (
-            <div className="p-4 bg-blue-50 dark:bg-blue-900/30 rounded-xl border border-blue-200 dark:border-blue-800">
-              <p className="text-sm text-blue-700 dark:text-blue-300">
+            <div className="p-4 bg-primary-50 dark:bg-primary-900/30 rounded-xl border border-primary-200 dark:border-primary-800">
+              <p className="text-sm text-primary-700 dark:text-primary-300">
                 <strong>Note :</strong> Après votre inscription, vous pourrez utiliser le code d&apos;inscription 
                 fourni par votre entreprise pour vous inscrire aux formations.
               </p>
             </div>
           )}
 
-          {/* Common Fields */}
-          <div className="grid grid-cols-1 gap-4">
-            {/* Username (Professor only) */}
-            {data.role === "professor" && (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Nom d&apos;utilisateur *
-                </label>
-                <div className="relative">
-                  <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={data.username}
-                    onChange={(e) => updateField("username", e.target.value)}
-                    className={`w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
-                      fieldErrors.username ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                    } text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all`}
-                    placeholder="johndoe"
-                  />
-                </div>
-                {fieldErrors.username && (
-                  <p className="text-red-500 text-xs mt-1">{fieldErrors.username}</p>
-                )}
-              </div>
-            )}
+          {/* Username (Professor only) */}
+          {data.role === "professor" && (
+            <FormInput
+              id="username"
+              label="Nom d'utilisateur *"
+              icon={User}
+              value={data.username}
+              onChange={(e) => updateField("username", e.target.value)}
+              placeholder="johndoe"
+              error={fieldErrors.username}
+            />
+          )}
 
-            {/* Full Name */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                {data.role === "company" ? "Nom du contact *" : "Nom complet *"}
-              </label>
-              <div className="relative">
-                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  type="text"
-                  value={data.fullname}
-                  onChange={(e) => updateField("fullname", e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
-                    fieldErrors.fullname ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                  } text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all`}
-                  placeholder="Jean Dupont"
-                />
-              </div>
-              {fieldErrors.fullname && (
-                <p className="text-red-500 text-xs mt-1">{fieldErrors.fullname}</p>
-              )}
-            </div>
+          {/* Full Name */}
+          <FormInput
+            id="fullname"
+            label={data.role === "company" ? "Nom du contact *" : "Nom complet *"}
+            icon={User}
+            value={data.fullname}
+            onChange={(e) => updateField("fullname", e.target.value)}
+            placeholder="Jean Dupont"
+            error={fieldErrors.fullname}
+          />
 
-            {/* Email */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Email *
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  type="email"
-                  value={data.email}
-                  onChange={(e) => updateField("email", e.target.value)}
-                  className={`w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
-                    fieldErrors.email ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                  } text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all`}
-                  placeholder="jean@example.com"
-                />
-              </div>
-              {fieldErrors.email && (
-                <p className="text-red-500 text-xs mt-1">{fieldErrors.email}</p>
-              )}
-            </div>
+          {/* Email */}
+          <FormInput
+            id="email"
+            type="email"
+            label="Email *"
+            icon={Mail}
+            value={data.email}
+            onChange={(e) => updateField("email", e.target.value)}
+            placeholder="jean@example.com"
+            error={fieldErrors.email}
+          />
 
-            {/* Phone (Optional) */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Téléphone
-              </label>
-              <div className="relative">
-                <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  type="tel"
-                  value={data.phone}
-                  onChange={(e) => updateField("phone", e.target.value)}
-                  className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all"
-                  placeholder="+33 6 12 34 56 78"
-                />
-              </div>
-            </div>
+          {/* Phone (Optional) */}
+          <FormInput
+            id="phone"
+            type="tel"
+            label="Téléphone"
+            icon={Phone}
+            value={data.phone}
+            onChange={(e) => updateField("phone", e.target.value)}
+            placeholder="+33 6 12 34 56 78"
+          />
 
-            {/* Company-specific fields */}
-            {data.role === "company" && (
-              <>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Nom de l&apos;entreprise *
-                  </label>
-                  <div className="relative">
-                    <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input
-                      type="text"
-                      value={data.company_name}
-                      onChange={(e) => updateField("company_name", e.target.value)}
-                      className={`w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
-                        fieldErrors.company_name ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                      } text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all`}
-                      placeholder="Acme Corp"
-                    />
-                  </div>
-                  {fieldErrors.company_name && (
-                    <p className="text-red-500 text-xs mt-1">{fieldErrors.company_name}</p>
-                  )}
-                </div>
+          {/* Company-specific fields */}
+          {data.role === "company" && (
+            <>
+              <FormInput
+                id="company_name"
+                label="Nom de l'entreprise *"
+                icon={Building2}
+                value={data.company_name}
+                onChange={(e) => updateField("company_name", e.target.value)}
+                placeholder="Acme Corp"
+                error={fieldErrors.company_name}
+              />
 
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Secteur d&apos;activité *
-                  </label>
-                  <div className="relative">
-                    <Briefcase className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                    <input
-                      type="text"
-                      value={data.industry_sector}
-                      onChange={(e) => updateField("industry_sector", e.target.value)}
-                      className={`w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
-                        fieldErrors.industry_sector ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                      } text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all`}
-                      placeholder="Technologies, Finance, Santé..."
-                    />
-                  </div>
-                  {fieldErrors.industry_sector && (
-                    <p className="text-red-500 text-xs mt-1">{fieldErrors.industry_sector}</p>
-                  )}
-                </div>
+              <FormInput
+                id="industry_sector"
+                label="Secteur d'activité *"
+                icon={Briefcase}
+                value={data.industry_sector}
+                onChange={(e) => updateField("industry_sector", e.target.value)}
+                placeholder="Technologies, Finance, Santé..."
+                error={fieldErrors.industry_sector}
+              />
 
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                    Informations de facturation *
-                  </label>
-                  <div className="relative">
-                    <FileText className="absolute left-3 top-3 w-5 h-5 text-slate-400" />
-                    <textarea
-                      value={data.billing_info}
-                      onChange={(e) => updateField("billing_info", e.target.value)}
-                      rows={3}
-                      className={`w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
-                        fieldErrors.billing_info ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                      } text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all resize-none`}
-                      placeholder="Adresse, SIRET, TVA..."
-                    />
-                  </div>
-                  {fieldErrors.billing_info && (
-                    <p className="text-red-500 text-xs mt-1">{fieldErrors.billing_info}</p>
-                  )}
-                </div>
-              </>
-            )}
+              <FormTextarea
+                id="billing_info"
+                label="Informations de facturation *"
+                icon={FileText}
+                value={data.billing_info}
+                onChange={(e) => updateField("billing_info", e.target.value)}
+                placeholder="Adresse, SIRET, TVA..."
+                error={fieldErrors.billing_info}
+              />
+            </>
+          )}
 
-            {/* Professor-specific fields */}
-            {data.role === "professor" && (
-              <div className="space-y-2">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Spécialisation *
-                </label>
-                <div className="relative">
-                  <BookOpen className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                  <input
-                    type="text"
-                    value={data.specialization}
-                    onChange={(e) => updateField("specialization", e.target.value)}
-                    className={`w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
-                      fieldErrors.specialization ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                    } text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all`}
-                    placeholder="Intelligence Artificielle, Finance, Marketing..."
-                  />
-                </div>
-                {fieldErrors.specialization && (
-                  <p className="text-red-500 text-xs mt-1">{fieldErrors.specialization}</p>
-                )}
-              </div>
-            )}
+          {/* Professor-specific fields */}
+          {data.role === "professor" && (
+            <FormInput
+              id="specialization"
+              label="Spécialisation *"
+              icon={BookOpen}
+              value={data.specialization}
+              onChange={(e) => updateField("specialization", e.target.value)}
+              placeholder="Intelligence Artificielle, Finance, Marketing..."
+              error={fieldErrors.specialization}
+            />
+          )}
 
-            {/* Password */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Mot de passe *
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  type={showPassword ? "text" : "password"}
-                  value={data.password}
-                  onChange={(e) => updateField("password", e.target.value)}
-                  className={`w-full pl-10 pr-12 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
-                    fieldErrors.password ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                  } text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all`}
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowPassword(!showPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                >
-                  {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-              {fieldErrors.password && (
-                <p className="text-red-500 text-xs mt-1">{fieldErrors.password}</p>
-              )}
-            </div>
+          {/* Document Upload for Company and Professor */}
+          {selectedRole?.requiresDocument && (
+            <FileUpload
+              label={selectedRole.documentLabel}
+              icon={Upload}
+              value={data.verificationDocument}
+              onChange={(file) => updateField("verificationDocument", file)}
+              hint={selectedRole.documentHint}
+              error={fieldErrors.verificationDocument}
+              required
+              accept=".pdf,.jpg,.jpeg,.png"
+            />
+          )}
 
-            {/* Confirm Password */}
-            <div className="space-y-2">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                Confirmer le mot de passe *
-              </label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-                <input
-                  type={showConfirmPassword ? "text" : "password"}
-                  value={data.confirmPassword}
-                  onChange={(e) => updateField("confirmPassword", e.target.value)}
-                  className={`w-full pl-10 pr-12 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
-                    fieldErrors.confirmPassword ? "border-red-500" : "border-slate-200 dark:border-slate-700"
-                  } text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500 transition-all`}
-                  placeholder="••••••••"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                >
-                  {showConfirmPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                </button>
-              </div>
-              {fieldErrors.confirmPassword && (
-                <p className="text-red-500 text-xs mt-1">{fieldErrors.confirmPassword}</p>
-              )}
-            </div>
-          </div>
+          {/* Password */}
+          <FormInput
+            id="password"
+            label="Mot de passe *"
+            icon={Lock}
+            value={data.password}
+            onChange={(e) => updateField("password", e.target.value)}
+            placeholder="••••••••"
+            showPasswordToggle
+            error={fieldErrors.password}
+            hint="Minimum 8 caractères"
+          />
+
+          {/* Confirm Password */}
+          <FormInput
+            id="confirmPassword"
+            label="Confirmer le mot de passe *"
+            icon={Lock}
+            value={data.confirmPassword}
+            onChange={(e) => updateField("confirmPassword", e.target.value)}
+            placeholder="••••••••"
+            showPasswordToggle
+            error={fieldErrors.confirmPassword}
+          />
 
           {/* Submit Button */}
           <button
             type="submit"
             disabled={isLoading}
-            className="w-full py-3.5 mt-4 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 active:scale-[0.98] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25"
+            className="btn-primary w-full h-12 mt-2 flex items-center justify-center gap-2"
           >
             {isLoading ? (
               <>
@@ -573,10 +526,10 @@ export default function SignupPage() {
       {/* Divider */}
       <div className="relative my-6">
         <div className="absolute inset-0 flex items-center">
-          <div className="w-full border-t border-slate-200 dark:border-slate-700"></div>
+          <div className="w-full border-t border-border"></div>
         </div>
         <div className="relative flex justify-center text-sm">
-          <span className="px-4 bg-white dark:bg-slate-800/50 text-slate-500 dark:text-slate-400">
+          <span className="px-4 bg-background text-muted-foreground">
             Déjà inscrit ?
           </span>
         </div>
@@ -585,7 +538,7 @@ export default function SignupPage() {
       {/* Login Link */}
       <Link
         href="/login"
-        className="block w-full py-3.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-semibold text-center hover:border-purple-500 hover:text-purple-500 dark:hover:border-purple-500 dark:hover:text-purple-400 transition-all"
+        className="btn-secondary block w-full h-12 flex items-center justify-center text-center"
       >
         Se connecter
       </Link>

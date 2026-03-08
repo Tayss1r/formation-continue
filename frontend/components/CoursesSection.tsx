@@ -68,14 +68,14 @@ export function CoursesSection() {
             whileInView={{ scale: 1, opacity: 1 }}
             viewport={{ once: true }}
             transition={{ delay: 0.1, duration: 0.4 }}
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-purple-500/10 border border-purple-500/20 mb-6"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary-500/10 border border-primary-500/20 mb-6"
           >
-            <BookOpen className="w-4 h-4 text-purple-500" />
-            <span className="text-sm text-purple-500 font-medium">
+            <BookOpen className="w-4 h-4 text-primary-500" />
+            <span className="text-sm text-primary-500 font-medium">
               Formation Continue
             </span>
           </motion.div>
-          <h2 className="text-3xl sm:text-4xl font-bold text-slate-900 dark:text-white mb-4">
+          <h2 className="text-3xl sm:text-4xl font-bold text-foreground mb-4">
             Découvrez Nos{" "}
             <span className="gradient-text">Formations</span>
           </h2>
@@ -91,7 +91,7 @@ export function CoursesSection() {
             <motion.div
               animate={{ rotate: 360 }}
               transition={{ duration: 1, repeat: Infinity, ease: "linear" }}
-              className="rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"
+              className="rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"
             />
           </div>
         )}
@@ -106,7 +106,7 @@ export function CoursesSection() {
             <p className="text-red-500 mb-4">{error}</p>
             <button
               onClick={() => window.location.reload()}
-              className="px-6 py-2 bg-purple-500 text-white rounded-lg hover:bg-purple-600 transition-colors"
+              className="btn-primary px-6 py-2"
             >
               Réessayer
             </button>
@@ -120,11 +120,11 @@ export function CoursesSection() {
             animate={{ opacity: 1, y: 0 }}
             className="text-center py-20"
           >
-            <BookOpen className="w-16 h-16 mx-auto text-slate-400 mb-4" />
-            <h3 className="text-xl font-semibold text-slate-900 dark:text-white mb-2">
+            <BookOpen className="w-16 h-16 mx-auto text-muted-foreground mb-4" />
+            <h3 className="text-xl font-semibold text-foreground mb-2">
               Aucune Formation Disponible
             </h3>
-            <p className="text-slate-600 dark:text-slate-400">
+            <p className="text-muted-foreground">
               Revenez bientôt pour de nouvelles formations.
             </p>
           </motion.div>

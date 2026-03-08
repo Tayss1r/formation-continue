@@ -1,20 +1,110 @@
 import os
 import uuid
 import shutil
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
-from ..db.models import Course, User, CourseType
+from ..db.models import Course, User, CourseType, Professor, Department
 from ..schemas.course_schema import CourseCreate, CourseUpdate
 from ..core.config import settings
 
 
 class CourseService:
     """Service class for course-related operations"""
+
+    @staticmethod
+    async def get_professors_list(
+        session: AsyncSession,
+        department: Optional[str] = None
+    ) -> List[dict]:
+        """
+        Get list of professors, optionally filtered and ranked by department relevance.
+        
+        Ranking logic:
+        1. Professors from the same department appear first
+        2. Within same department, professors with more courses in that department rank higher
+        3. Professors from other departments appear after
+        
+        Returns a list of dicts with professor info + user details + relevance score.
+        """
+        from ..db.models import User as UserModel
+        
+        query = select(Professor).options(
+            selectinload(Professor.user),
+            selectinload(Professor.courses)
+        )
+        
+        result = await session.execute(query)
+        professors = result.scalars().all()
+        
+        # Transform to include user details and calculate relevance
+        professor_list = []
+        dept_enum = None
+        if department:
+            try:
+                dept_enum = Department(department)
+            except ValueError:
+                pass
+        
+        for prof in professors:
+            dept_display = None
+            if prof.department:
+                dept_display = {
+                    'informatique': 'Technologie de l\'informatique',
+                    'mecanique': 'Génie mécanique',
+                    'electrique': 'Génie électrique',
+                    'civil': 'Génie civil',
+                    'gestion': 'Sciences Économiques et Sciences de Gestion'
+                }.get(prof.department.value, prof.department.value)
+            
+            # Calculate relevance score
+            relevance_score = 0
+            courses_in_department = 0
+            total_courses = len(prof.courses) if prof.courses else 0
+            
+            # If filtering by department
+            if dept_enum:
+                # Same department = highest relevance
+                if prof.department == dept_enum:
+                    relevance_score = 100
+                
+                # Count courses taught in the target department
+                if prof.courses:
+                    for course in prof.courses:
+                        if course.department == dept_enum:
+                            courses_in_department += 1
+                
+                # Add bonus for courses in target department
+                relevance_score += courses_in_department * 10
+                
+                # Small bonus for total teaching experience
+                relevance_score += min(total_courses, 10)
+            else:
+                # No filter - rank by total courses taught
+                relevance_score = total_courses
+            
+            professor_list.append({
+                'id': prof.id,
+                'user_id': prof.user_id,
+                'fullname': prof.user.fullname if prof.user else 'Unknown',
+                'email': prof.user.email if prof.user else '',
+                'specialization': prof.specialization,
+                'department': prof.department.value if prof.department else None,
+                'department_display': dept_display,
+                'courses_taught': total_courses,
+                'courses_in_department': courses_in_department,
+                'relevance_score': relevance_score,
+                'is_recommended': relevance_score >= 100 if dept_enum else total_courses > 0
+            })
+        
+        # Sort by relevance score (descending), then by fullname (ascending)
+        professor_list.sort(key=lambda x: (-x['relevance_score'], x['fullname'].lower()))
+        
+        return professor_list
 
     @staticmethod
     async def get_course_by_id(
@@ -39,7 +129,8 @@ class CourseService:
         session: AsyncSession,
         page: int = 1,
         per_page: int = 12,
-        course_type: Optional[str] = None
+        course_type: Optional[str] = None,
+        department: Optional[str] = None
     ) -> tuple[list[Course], int]:
         """Get all public/published courses for the landing page"""
         # Build base query for published courses
@@ -50,6 +141,14 @@ class CourseService:
         # Filter by course type if specified
         if course_type:
             base_query = base_query.where(Course.type == CourseType(course_type))
+        
+        # Filter by department if specified
+        if department:
+            try:
+                dept_enum = Department(department)
+                base_query = base_query.where(Course.department == dept_enum)
+            except ValueError:
+                pass  # Invalid department, ignore filter
         
         # Get total count
         count_query = select(func.count()).select_from(base_query.subquery())
@@ -134,6 +233,14 @@ class CourseService:
         if image:
             image_path = await CourseService.save_course_image(image)
         
+        # Parse department enum if provided
+        department_enum = None
+        if course_data.department:
+            try:
+                department_enum = Department(course_data.department)
+            except ValueError:
+                pass  # Invalid department, leave as None
+        
         # Create course instance
         course = Course(
             title=course_data.title,
@@ -145,6 +252,8 @@ class CourseService:
             duration_hours=course_data.duration_hours,
             sector=course_data.sector,
             professor_id=course_data.professor_id,
+            department=department_enum,
+            learning_outcomes=course_data.learning_outcomes,
             is_published=course_data.is_published,
             image_path=image_path,
             created_by_id=user.id
@@ -181,6 +290,11 @@ class CourseService:
         for field, value in update_data.items():
             if field == "type" and value:
                 setattr(course, field, CourseType(value))
+            elif field == "department" and value:
+                try:
+                    setattr(course, field, Department(value))
+                except ValueError:
+                    pass  # Invalid department, skip
             else:
                 setattr(course, field, value)
         
@@ -264,23 +378,23 @@ class CourseService:
         return result.scalar_one_or_none() is not None
     
     @staticmethod
-    async def course_has_bookings(course_id: int, session: AsyncSession) -> bool:
+    async def course_has_applications(course_id: int, session: AsyncSession) -> bool:
         """
-        Check if a course has any bookings through its availability slots.
-        Returns True if any slot has reserved_seats > 0.
+        Check if a course has any applications through its calls for applicants.
+        Returns True if any approved or pending application exists.
         """
-        from ..db.models import CourseAvailability, CompanyBooking, BookingStatus
+        from ..db.models import CallForApplicants, CompanyApplication, ApplicationStatus
         from sqlalchemy import exists, and_
         
-        # Check if any booking exists for any availability slot of this course
-        # that is not cancelled
+        # Check if any application exists for any call of this course
+        # that is not rejected
         subquery = (
-            select(CompanyBooking.id)
-            .join(CourseAvailability, CompanyBooking.availability_slot_id == CourseAvailability.id)
+            select(CompanyApplication.id)
+            .join(CallForApplicants, CompanyApplication.call_id == CallForApplicants.id)
             .where(
                 and_(
-                    CourseAvailability.course_id == course_id,
-                    CompanyBooking.status != BookingStatus.CANCELLED
+                    CallForApplicants.course_id == course_id,
+                    CompanyApplication.status != ApplicationStatus.REJECTED
                 )
             )
         )
@@ -295,11 +409,11 @@ class CourseService:
         Check if a course's price and seats can be edited.
         Returns info about editability and reason if not editable.
         """
-        has_bookings = await CourseService.course_has_bookings(course_id, session)
+        has_applications = await CourseService.course_has_applications(course_id, session)
         
         return {
-            "can_edit_price": not has_bookings,
-            "can_edit_seats": not has_bookings,
-            "has_bookings": has_bookings,
-            "reason": "Impossible de modifier après des réservations" if has_bookings else None
+            "can_edit_price": not has_applications,
+            "can_edit_seats": not has_applications,
+            "has_applications": has_applications,
+            "reason": "Impossible de modifier après des candidatures" if has_applications else None
         }

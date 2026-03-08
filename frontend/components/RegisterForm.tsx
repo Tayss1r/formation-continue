@@ -101,12 +101,12 @@ export function RegisterForm({ onSwitchToLogin, onClose }: RegisterFormProps) {
       <div className="space-y-2">
         <label
           htmlFor="register-name"
-          className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+          className="block text-sm font-medium text-muted-foreground"
         >
           Full Name
         </label>
         <div className="relative">
-          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
           <input
             id="register-name"
             type="text"
@@ -115,11 +115,11 @@ export function RegisterForm({ onSwitchToLogin, onClose }: RegisterFormProps) {
               setCredentials((prev) => ({ ...prev, fullName: e.target.value }))
             }
             placeholder="John Doe"
-            className={`w-full pl-10 pr-4 py-3 rounded-xl bg-white dark:bg-slate-800/50 border ${
+            className={`form-input pl-10 ${
               errors.fullName
-                ? "border-red-500"
-                : "border-slate-300 dark:border-slate-700/50"
-            } text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all`}
+                ? "border-red-500 focus:ring-red-500/50"
+                : ""
+            }`}
           />
         </div>
         {errors.fullName && (
@@ -131,12 +131,12 @@ export function RegisterForm({ onSwitchToLogin, onClose }: RegisterFormProps) {
       <div className="space-y-2">
         <label
           htmlFor="register-email"
-          className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+          className="block text-sm font-medium text-muted-foreground"
         >
           Email
         </label>
         <div className="relative">
-          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
           <input
             id="register-email"
             type="email"
@@ -145,11 +145,11 @@ export function RegisterForm({ onSwitchToLogin, onClose }: RegisterFormProps) {
               setCredentials((prev) => ({ ...prev, email: e.target.value }))
             }
             placeholder="you@example.com"
-            className={`w-full pl-10 pr-4 py-3 rounded-xl bg-white dark:bg-slate-800/50 border ${
+            className={`form-input pl-10 ${
               errors.email
-                ? "border-red-500"
-                : "border-slate-300 dark:border-slate-700/50"
-            } text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all`}
+                ? "border-red-500 focus:ring-red-500/50"
+                : ""
+            }`}
           />
         </div>
         {errors.email && (
@@ -161,12 +161,12 @@ export function RegisterForm({ onSwitchToLogin, onClose }: RegisterFormProps) {
       <div className="space-y-2">
         <label
           htmlFor="register-password"
-          className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+          className="block text-sm font-medium text-muted-foreground"
         >
           Password
         </label>
         <div className="relative">
-          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
           <input
             id="register-password"
             type={showPassword ? "text" : "password"}
@@ -175,16 +175,16 @@ export function RegisterForm({ onSwitchToLogin, onClose }: RegisterFormProps) {
               setCredentials((prev) => ({ ...prev, password: e.target.value }))
             }
             placeholder="••••••••"
-            className={`w-full pl-10 pr-12 py-3 rounded-xl bg-white dark:bg-slate-800/50 border ${
+            className={`form-input pl-10 pr-12 ${
               errors.password
-                ? "border-red-500"
-                : "border-slate-300 dark:border-slate-700/50"
-            } text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all`}
+                ? "border-red-500 focus:ring-red-500/50"
+                : ""
+            }`}
           />
           <button
             type="button"
             onClick={() => setShowPassword(!showPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
           >
             {showPassword ? (
               <EyeOff className="w-5 h-5" />
@@ -202,12 +202,12 @@ export function RegisterForm({ onSwitchToLogin, onClose }: RegisterFormProps) {
       <div className="space-y-2">
         <label
           htmlFor="register-confirm-password"
-          className="block text-sm font-medium text-slate-700 dark:text-slate-300"
+          className="block text-sm font-medium text-muted-foreground"
         >
           Confirm Password
         </label>
         <div className="relative">
-          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+          <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
           <input
             id="register-confirm-password"
             type={showConfirmPassword ? "text" : "password"}
@@ -219,16 +219,16 @@ export function RegisterForm({ onSwitchToLogin, onClose }: RegisterFormProps) {
               }))
             }
             placeholder="••••••••"
-            className={`w-full pl-10 pr-12 py-3 rounded-xl bg-white dark:bg-slate-800/50 border ${
+            className={`form-input pl-10 pr-12 ${
               errors.confirmPassword
-                ? "border-red-500"
-                : "border-slate-300 dark:border-slate-700/50"
-            } text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 transition-all`}
+                ? "border-red-500 focus:ring-red-500/50"
+                : ""
+            }`}
           />
           <button
             type="button"
             onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
           >
             {showConfirmPassword ? (
               <EyeOff className="w-5 h-5" />
@@ -246,7 +246,7 @@ export function RegisterForm({ onSwitchToLogin, onClose }: RegisterFormProps) {
       <button
         type="submit"
         disabled={isLoading}
-        className="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+        className="btn-primary w-full py-3 flex items-center justify-center gap-2"
       >
         {isLoading ? (
           <>
@@ -259,24 +259,24 @@ export function RegisterForm({ onSwitchToLogin, onClose }: RegisterFormProps) {
       </button>
 
       {/* Terms */}
-      <p className="text-center text-xs text-slate-500 dark:text-slate-500">
+      <p className="text-center text-xs text-muted-foreground">
         By creating an account, you agree to our{" "}
-        <a href="/terms" className="text-purple-500 hover:text-purple-400">
+        <a href="/terms" className="text-primary-500 hover:text-primary-600">
           Terms of Service
         </a>{" "}
         and{" "}
-        <a href="/privacy" className="text-purple-500 hover:text-purple-400">
+        <a href="/privacy" className="text-primary-500 hover:text-primary-600">
           Privacy Policy
         </a>
       </p>
 
       {/* Switch to Login */}
-      <p className="text-center text-sm text-slate-600 dark:text-slate-400">
+      <p className="text-center text-sm text-muted-foreground">
         Already have an account?{" "}
         <button
           type="button"
           onClick={onSwitchToLogin}
-          className="text-purple-500 hover:text-purple-400 font-medium transition-colors"
+          className="text-primary-500 hover:text-primary-600 font-medium transition-colors"
         >
           Sign in
         </button>

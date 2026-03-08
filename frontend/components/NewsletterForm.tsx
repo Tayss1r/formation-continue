@@ -106,7 +106,7 @@ export function NewsletterForm({ variant = "footer" }: NewsletterFormProps) {
       whileInView={{ opacity: 1, y: 0 }}
       viewport={{ once: true }}
       transition={{ duration: 0.5 }}
-      className={isFooter ? "" : "bg-gradient-to-br from-purple-500/10 via-transparent to-pink-500/10 rounded-3xl border border-purple-500/20 p-8 md:p-12"}
+      className={isFooter ? "" : "bg-primary-50/50 dark:bg-primary-900/10 rounded-3xl border border-primary-200 dark:border-primary-500/20 p-8 md:p-12"}
     >
       {!isFooter && (
         <div className="text-center mb-8">
@@ -115,14 +115,14 @@ export function NewsletterForm({ variant = "footer" }: NewsletterFormProps) {
             whileInView={{ scale: 1 }}
             viewport={{ once: true }}
             transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
-            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 mb-4"
+            className="inline-flex items-center justify-center w-16 h-16 rounded-2xl gradient-primary mb-4"
           >
             <Mail className="w-8 h-8 text-white" />
           </motion.div>
-          <h2 className="text-2xl md:text-3xl font-bold text-slate-900 dark:text-white mb-3">
+          <h2 className="text-2xl md:text-3xl font-bold text-foreground mb-3">
             Restez informé des formations
           </h2>
-          <p className="text-slate-600 dark:text-slate-400 max-w-md mx-auto">
+          <p className="text-muted-foreground max-w-md mx-auto">
             Recevez des offres de formation et de consulting adaptées à votre secteur d&apos;activité.
           </p>
         </div>
@@ -132,19 +132,19 @@ export function NewsletterForm({ variant = "footer" }: NewsletterFormProps) {
         {/* Email Input */}
         <div className={isFooter ? "flex-1" : "relative"}>
           {!isFooter && (
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-muted-foreground mb-2">
               Adresse Email
             </label>
           )}
           <div className="relative">
-            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="votre@email.com"
               disabled={isLoading}
-              className="w-full pl-10 pr-4 py-3 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all disabled:opacity-50"
+              className="form-input pl-10 disabled:opacity-50"
             />
           </div>
         </div>
@@ -152,17 +152,17 @@ export function NewsletterForm({ variant = "footer" }: NewsletterFormProps) {
         {/* Sector Select */}
         <div className={isFooter ? "flex-1" : "relative"}>
           {!isFooter && (
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <label className="block text-sm font-medium text-muted-foreground mb-2">
               Secteur d&apos;Activité
             </label>
           )}
           <div className="relative">
-            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
             <select
               value={sector}
               onChange={(e) => setSector(e.target.value)}
               disabled={isLoading}
-              className="w-full pl-10 pr-4 py-3 rounded-xl bg-white dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700/50 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-purple-500/50 focus:border-purple-500/50 transition-all disabled:opacity-50 appearance-none cursor-pointer"
+              className="form-input pl-10 appearance-none cursor-pointer disabled:opacity-50"
             >
               <option value="">Sélectionnez votre secteur</option>
               {INDUSTRY_SECTORS.map((s) => (
@@ -180,7 +180,7 @@ export function NewsletterForm({ variant = "footer" }: NewsletterFormProps) {
           disabled={isLoading || !email || !sector}
           whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.98 }}
-          className={`${isFooter ? "px-6" : "w-full"} py-3 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-semibold hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 shadow-lg shadow-purple-500/25`}
+          className={`${isFooter ? "px-6" : "w-full"} btn-primary py-3 shadow-lg shadow-primary-500/25`}
         >
           {isLoading ? (
             <>
@@ -225,7 +225,7 @@ export function NewsletterForm({ variant = "footer" }: NewsletterFormProps) {
       </AnimatePresence>
 
       {!isFooter && (
-        <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-4">
+        <p className="text-center text-xs text-muted-foreground mt-4">
           En vous inscrivant, vous acceptez de recevoir des communications personnalisées selon votre secteur.
           <br />
           Désabonnement possible à tout moment.

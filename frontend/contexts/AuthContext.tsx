@@ -19,6 +19,7 @@ interface AuthContextType {
   signup: (data: SignupData) => Promise<AuthUser>;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
+  updateUser: (data: Partial<AuthUser>) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -78,6 +79,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const updateUser = (data: Partial<AuthUser>) => {
+    setUser(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, ...data };
+      localStorage.setItem("user", JSON.stringify(updated));
+      return updated;
+    });
+  };
+
   const value: AuthContextType = {
     user,
     isLoading,
@@ -86,6 +96,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     signup,
     logout,
     checkAuth,
+    updateUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -122,7 +133,7 @@ export function withAuth<P extends object>(
     if (isLoading) {
       return (
         <div className="flex items-center justify-center min-h-screen">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-purple-500"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary-500"></div>
         </div>
       );
     }

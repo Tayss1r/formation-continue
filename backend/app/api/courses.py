@@ -1,10 +1,11 @@
 import math
-from typing import Optional
+import json
+from typing import Optional, List
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_session
-from ..db.models import User, UserRole
+from ..db.models import User, UserRole, Department
 from ..dependencies import get_current_user, get_staff_user, RoleChecker
 from ..schemas.course_schema import (
     CourseCreate,
@@ -14,6 +15,11 @@ from ..schemas.course_schema import (
     CourseListResponse,
     CourseDeleteResponse,
     CourseEditabilityOut,
+    DepartmentOut,
+    DepartmentListOut,
+    ProfessorListItemOut,
+    ProfessorListResponse,
+    DEPARTMENT_DISPLAY_NAMES,
 )
 from ..services.course_service import CourseService
 from ..error import CourseHasBookings
@@ -25,11 +31,43 @@ course_router = APIRouter()
 # PUBLIC ENDPOINTS
 # ========================
 
+@course_router.get("/departments", response_model=DepartmentListOut)
+async def get_departments():
+    """
+    Get list of available departments.
+    Public endpoint for dropdowns.
+    """
+    departments = [
+        DepartmentOut(value=dept.value, label=DEPARTMENT_DISPLAY_NAMES[dept.value])
+        for dept in Department
+    ]
+    return DepartmentListOut(departments=departments)
+
+
+@course_router.get("/professors", response_model=ProfessorListResponse)
+async def get_professors(
+    department: Optional[str] = Query(None, description="Filter by department"),
+    current_user: User = Depends(get_staff_user),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Get list of professors for course assignment.
+    Can filter by department.
+    Staff only.
+    """
+    professors = await CourseService.get_professors_list(session, department)
+    return ProfessorListResponse(
+        professors=professors,
+        total=len(professors)
+    )
+
+
 @course_router.get("/public", response_model=CourseListResponse)
 async def get_public_courses(
     page: int = Query(1, ge=1, description="Page number"),
     per_page: int = Query(12, ge=1, le=50, description="Items per page"),
     course_type: Optional[str] = Query(None, description="Filter by course type (public/private)"),
+    department: Optional[str] = Query(None, description="Filter by department"),
     session: AsyncSession = Depends(get_session)
 ):
     """
@@ -40,7 +78,8 @@ async def get_public_courses(
         session=session,
         page=page,
         per_page=per_page,
-        course_type=course_type
+        course_type=course_type,
+        department=department
     )
     
     total_pages = math.ceil(total / per_page) if total > 0 else 1
@@ -185,6 +224,8 @@ async def create_course(
     duration_hours: Optional[int] = Form(None),
     sector: Optional[str] = Form(None),
     professor_id: Optional[int] = Form(None),
+    department: Optional[str] = Form(None),
+    learning_outcomes: Optional[str] = Form(None),  # JSON string array
     is_published: bool = Form(True),
     image: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_staff_user),
@@ -194,7 +235,20 @@ async def create_course(
     Create a new course (template) with optional image upload.
     Course dates are managed via availability slots, not on the course itself.
     Staff only.
+    
+    learning_outcomes should be a JSON string array, e.g.: '["item1", "item2"]'
     """
+    # Parse learning_outcomes from JSON string
+    parsed_outcomes = None
+    if learning_outcomes:
+        try:
+            parsed_outcomes = json.loads(learning_outcomes)
+            if not isinstance(parsed_outcomes, list):
+                parsed_outcomes = [parsed_outcomes]
+        except json.JSONDecodeError:
+            # If not JSON, treat as single item
+            parsed_outcomes = [learning_outcomes]
+    
     course_data = CourseCreate(
         title=title,
         description=description,
@@ -205,6 +259,8 @@ async def create_course(
         duration_hours=duration_hours,
         sector=sector,
         professor_id=professor_id,
+        department=department,
+        learning_outcomes=parsed_outcomes,
         is_published=is_published
     )
     
@@ -230,6 +286,8 @@ async def update_course(
     duration_hours: Optional[int] = Form(None),
     sector: Optional[str] = Form(None),
     professor_id: Optional[int] = Form(None),
+    department: Optional[str] = Form(None),
+    learning_outcomes: Optional[str] = Form(None),  # JSON string array
     is_published: Optional[bool] = Form(None),
     image: Optional[UploadFile] = File(None),
     current_user: User = Depends(get_staff_user),
@@ -241,6 +299,7 @@ async def update_course(
     Staff only.
     
     BUSINESS RULE: Price and max_seats cannot be modified if there are existing bookings.
+    learning_outcomes should be a JSON string array, e.g.: '["item1", "item2"]'
     """
     course = await CourseService.get_course_by_id(course_id, session, include_relations=False)
     
@@ -265,6 +324,16 @@ async def update_course(
                (max_seats is not None and max_seats != course.max_seats):
                 raise CourseHasBookings()
     
+    # Parse learning_outcomes from JSON string
+    parsed_outcomes = None
+    if learning_outcomes:
+        try:
+            parsed_outcomes = json.loads(learning_outcomes)
+            if not isinstance(parsed_outcomes, list):
+                parsed_outcomes = [parsed_outcomes]
+        except json.JSONDecodeError:
+            parsed_outcomes = [learning_outcomes]
+    
     course_data = CourseUpdate(
         title=title,
         description=description,
@@ -275,6 +344,8 @@ async def update_course(
         duration_hours=duration_hours,
         sector=sector,
         professor_id=professor_id,
+        department=department,
+        learning_outcomes=parsed_outcomes,
         is_published=is_published
     )
     

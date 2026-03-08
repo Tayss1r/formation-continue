@@ -1,6 +1,19 @@
 from datetime import datetime, timezone
-from typing import Optional, Literal
+from typing import Optional, Literal, List
 from pydantic import BaseModel, Field, ConfigDict, model_validator
+
+
+# Department enum values matching backend
+DepartmentType = Literal["informatique", "mecanique", "electrique", "civil", "gestion"]
+
+# Display names for departments (for frontend)
+DEPARTMENT_DISPLAY_NAMES = {
+    "informatique": "Technologie de l'informatique",
+    "mecanique": "Génie mécanique",
+    "electrique": "Génie électrique",
+    "civil": "Génie civil",
+    "gestion": "Sciences Économiques et Sciences de Gestion",
+}
 
 
 class CourseBase(BaseModel):
@@ -17,6 +30,8 @@ class CourseBase(BaseModel):
     duration_hours: Optional[int] = Field(None, ge=1)
     sector: Optional[str] = Field(None, max_length=100, description="Target industry sector")
     professor_id: Optional[int] = None
+    department: Optional[DepartmentType] = Field(None, description="Course department")
+    learning_outcomes: Optional[List[str]] = Field(None, description="What students will learn")
     is_published: bool = True
 
 
@@ -31,6 +46,8 @@ class CourseCreate(BaseModel):
     duration_hours: Optional[int] = Field(None, ge=1)
     sector: Optional[str] = Field(None, max_length=100)
     professor_id: Optional[int] = None
+    department: Optional[DepartmentType] = Field(None, description="Course department (required)")
+    learning_outcomes: Optional[List[str]] = Field(None, description="List of learning outcomes")
     is_published: bool = True
 
 
@@ -45,6 +62,8 @@ class CourseUpdate(BaseModel):
     duration_hours: Optional[int] = Field(None, ge=1)
     sector: Optional[str] = Field(None, max_length=100)
     professor_id: Optional[int] = None
+    department: Optional[DepartmentType] = None
+    learning_outcomes: Optional[List[str]] = None
     is_published: Optional[bool] = None
 
 
@@ -62,6 +81,7 @@ class CourseProfessorOut(BaseModel):
     id: int
     specialization: str
     hourly_rate: float
+    department: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -78,6 +98,8 @@ class CourseOut(BaseModel):
     image_path: Optional[str] = None
     duration_hours: Optional[int] = None
     sector: Optional[str] = None
+    department: Optional[str] = None
+    learning_outcomes: Optional[List[str]] = None
     is_published: bool
     created_at: datetime
     updated_at: datetime
@@ -98,6 +120,7 @@ class CourseListOut(BaseModel):
     image_path: Optional[str] = None
     duration_hours: Optional[int] = None
     sector: Optional[str] = None
+    department: Optional[str] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -123,3 +146,45 @@ class CourseEditabilityOut(BaseModel):
     can_edit_seats: bool
     has_bookings: bool
     reason: Optional[str] = None
+
+
+# ========================
+# DEPARTMENT ENDPOINTS
+# ========================
+
+class DepartmentOut(BaseModel):
+    """Schema for department response"""
+    value: str
+    label: str
+
+
+class DepartmentListOut(BaseModel):
+    """Schema for list of departments"""
+    departments: List[DepartmentOut]
+
+
+# ========================
+# PROFESSOR LIST ENDPOINTS
+# ========================
+
+class ProfessorListItemOut(BaseModel):
+    """Schema for professor in selector dropdown with relevance ranking"""
+    id: int
+    user_id: int
+    fullname: str
+    email: str
+    specialization: str
+    department: Optional[str] = None
+    department_display: Optional[str] = None
+    courses_taught: int = 0
+    courses_in_department: int = 0
+    relevance_score: int = 0
+    is_recommended: bool = False
+    
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProfessorListResponse(BaseModel):
+    """Schema for professor list response"""
+    professors: List[ProfessorListItemOut]
+    total: int

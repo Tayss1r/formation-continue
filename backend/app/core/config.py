@@ -24,8 +24,19 @@ class Settings(BaseSettings):
     # Image upload settings
     UPLOAD_DIR: str = "uploads"
     COURSES_UPLOAD_DIR: str = "uploads/courses"
+    DOCUMENTS_UPLOAD_DIR: str = "uploads/documents"
     MAX_IMAGE_SIZE: int = 5 * 1024 * 1024  # 5MB
+    MAX_DOCUMENT_SIZE: int = 25 * 1024 * 1024  # 25MB
     ALLOWED_IMAGE_TYPES: list[str] = ["image/jpeg", "image/png", "image/webp", "image/gif"]
+    ALLOWED_DOCUMENT_TYPES: list[str] = [
+        "application/pdf",
+        "application/msword",
+        "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        "application/vnd.ms-powerpoint",
+        "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        "application/vnd.ms-excel",
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    ]
 
     model_config = SettingsConfigDict(env_file='.env', env_file_encoding='utf-8') 
 

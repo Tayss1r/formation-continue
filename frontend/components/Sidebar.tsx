@@ -2,11 +2,11 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   BookOpen,
-  BarChart3,
+  CalendarCheck,
   Settings,
   LogOut,
   Menu,
@@ -14,6 +14,7 @@ import {
   Zap,
   ChevronRight,
 } from "lucide-react";
+import { useAuth } from "@/contexts/AuthContext";
 
 interface NavItem {
   name: string;
@@ -22,32 +23,31 @@ interface NavItem {
 }
 
 const navItems: NavItem[] = [
-  { name: "Overview", href: "/dashboard", icon: LayoutDashboard },
-  { name: "Courses", href: "/dashboard/courses", icon: BookOpen },
-  { name: "Progress", href: "/dashboard/progress", icon: BarChart3 },
-  { name: "Settings", href: "/dashboard/settings", icon: Settings },
+  { name: "Tableau de bord", href: "/dashboard", icon: LayoutDashboard },
+  { name: "Formations", href: "/courses", icon: BookOpen },
+  { name: "Réservations", href: "/dashboard/bookings", icon: CalendarCheck },
+  { name: "Paramètres", href: "/dashboard/settings", icon: Settings },
 ];
 
 export function Sidebar() {
   const pathname = usePathname();
+  const router = useRouter();
+  const { logout } = useAuth();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
 
   const handleLogout = async () => {
-    // TODO: Implement logout logic
-    // - Clear auth tokens
-    // - Clear user state
-    // - Redirect to home page
-    console.log("Logout clicked");
+    await logout();
+    router.push("/");
   };
 
   const SidebarContent = () => (
     <div className="flex flex-col h-full">
       {/* Logo */}
-      <div className="flex items-center gap-2 px-4 py-6 border-b border-slate-200 dark:border-slate-800">
-        <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">
+      <div className="flex items-center gap-2 px-4 py-6">
+        <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
           <Zap className="w-5 h-5 text-white" />
         </div>
-        <span className="text-xl font-bold text-slate-900 dark:text-white">
+        <span className="text-xl font-bold text-foreground">
           TrainFast
         </span>
       </div>
@@ -63,20 +63,20 @@ export function Sidebar() {
               onClick={() => setIsMobileOpen(false)}
               className={`flex items-center gap-3 px-3 py-2.5 rounded-xl text-sm font-medium transition-all duration-200 group ${
                 isActive
-                  ? "bg-gradient-to-r from-indigo-500/10 via-purple-500/10 to-pink-500/10 text-purple-600 dark:text-purple-400 border border-purple-500/20"
-                  : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:text-slate-900 dark:hover:text-white"
+                  ? "bg-primary-50 dark:bg-primary-900/20 text-primary-600 dark:text-primary-400 border border-primary-200 dark:border-primary-500/30"
+                  : "text-muted-foreground hover:bg-muted hover:text-foreground"
               }`}
             >
               <item.icon
                 className={`w-5 h-5 ${
                   isActive
-                    ? "text-purple-500"
-                    : "text-slate-400 group-hover:text-slate-600 dark:group-hover:text-slate-300"
+                    ? "text-primary-500"
+                    : "text-muted-foreground group-hover:text-foreground"
                 }`}
               />
               {item.name}
               {isActive && (
-                <ChevronRight className="w-4 h-4 ml-auto text-purple-500" />
+                <ChevronRight className="w-4 h-4 ml-auto text-primary-500" />
               )}
             </Link>
           );
@@ -84,13 +84,13 @@ export function Sidebar() {
       </nav>
 
       {/* Logout */}
-      <div className="p-3 border-t border-slate-200 dark:border-slate-800">
+      <div className="p-3">
         <button
           onClick={handleLogout}
-          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-slate-600 dark:text-slate-400 hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+          className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl text-sm font-medium text-muted-foreground hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-colors"
         >
           <LogOut className="w-5 h-5" />
-          Sign Out
+          Déconnexion
         </button>
       </div>
     </div>
@@ -101,9 +101,9 @@ export function Sidebar() {
       {/* Mobile Menu Button */}
       <button
         onClick={() => setIsMobileOpen(true)}
-        className="fixed top-4 left-4 z-40 lg:hidden p-2 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-lg"
+        className="fixed top-4 left-4 z-40 lg:hidden p-2 rounded-lg bg-card border border-border shadow-lg"
       >
-        <Menu className="w-6 h-6 text-slate-700 dark:text-slate-300" />
+        <Menu className="w-6 h-6 text-foreground" />
       </button>
 
       {/* Mobile Sidebar Overlay */}
@@ -116,21 +116,21 @@ export function Sidebar() {
 
       {/* Mobile Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform transition-transform duration-300 lg:hidden ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-card transform transition-transform duration-300 lg:hidden ${
           isMobileOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <button
           onClick={() => setIsMobileOpen(false)}
-          className="absolute top-4 right-4 p-2 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800"
+          className="absolute top-4 right-4 p-2 rounded-lg hover:bg-muted"
         >
-          <X className="w-5 h-5 text-slate-500" />
+          <X className="w-5 h-5 text-muted-foreground" />
         </button>
         <SidebarContent />
       </aside>
 
       {/* Desktop Sidebar */}
-      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transition-colors duration-300">
+      <aside className="hidden lg:flex lg:flex-col lg:w-64 lg:fixed lg:inset-y-0 bg-card transition-colors duration-300">
         <SidebarContent />
       </aside>
     </>

@@ -7,15 +7,27 @@ import {
   X,
   Clock,
   Users,
-  DollarSign,
   FileText,
   Tag,
   Loader2,
   AlertTriangle,
+  Building2,
+  GraduationCap,
+  Plus,
+  Trash2,
+  CheckCircle2,
 } from "lucide-react";
-import { createCourse, updateCourse, getCourseEditability } from "@/lib/courses";
+import { createCourse, updateCourse, getCourseEditability, getDepartments, getProfessors } from "@/lib/courses";
 import { getImageUrl } from "@/lib/config";
-import type { Course, CourseCreateData, CourseType, CourseEditability } from "@/types/course";
+import type { 
+  Course, 
+  CourseCreateData, 
+  CourseType, 
+  CourseEditability,
+  Department,
+  ProfessorListItem 
+} from "@/types/course";
+import { DEPARTMENT_DISPLAY_NAMES } from "@/types/course";
 
 interface CourseFormProps {
   course?: Course;
@@ -34,6 +46,10 @@ export function CourseForm({ course, mode }: CourseFormProps) {
     price: course?.price || 0,
     max_seats: course?.max_seats || 20,
     duration_hours: course?.duration_hours || undefined,
+    sector: course?.sector || "",
+    department: course?.department as Department || undefined,
+    professor_id: course?.professor?.id || undefined,
+    learning_outcomes: course?.learning_outcomes || [],
     is_published: course?.is_published ?? true,
   });
 
@@ -45,6 +61,28 @@ export function CourseForm({ course, mode }: CourseFormProps) {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [editability, setEditability] = useState<CourseEditability | null>(null);
   const [editabilityLoading, setEditabilityLoading] = useState(false);
+  
+  // New states for departments and professors
+  const [professors, setProfessors] = useState<ProfessorListItem[]>([]);
+  const [professorsLoading, setProfessorsLoading] = useState(false);
+  const [newOutcome, setNewOutcome] = useState("");
+
+  // Fetch professors when department changes
+  useEffect(() => {
+    async function fetchProfessors() {
+      setProfessorsLoading(true);
+      try {
+        const response = await getProfessors(formData.department);
+        setProfessors(response.professors);
+      } catch (err) {
+        console.error("Failed to fetch professors:", err);
+        setProfessors([]);
+      } finally {
+        setProfessorsLoading(false);
+      }
+    }
+    fetchProfessors();
+  }, [formData.department]);
 
   // Fetch editability status when editing a course
   useEffect(() => {
@@ -80,6 +118,29 @@ export function CourseForm({ course, mode }: CourseFormProps) {
     }
   };
 
+  const handleDepartmentChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value as Department | "";
+    setFormData((prev) => ({
+      ...prev,
+      department: value || undefined,
+      professor_id: undefined, // Reset professor when department changes
+    }));
+    if (errors.department) {
+      setErrors((prev) => ({ ...prev, department: "" }));
+    }
+  };
+
+  const handleProfessorChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const value = e.target.value;
+    setFormData((prev) => ({
+      ...prev,
+      professor_id: value ? Number(value) : undefined,
+    }));
+    if (errors.professor_id) {
+      setErrors((prev) => ({ ...prev, professor_id: "" }));
+    }
+  };
+
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, checked } = e.target;
     setFormData((prev) => ({
@@ -93,13 +154,13 @@ export function CourseForm({ course, mode }: CourseFormProps) {
     if (file) {
       // Validate file type
       if (!file.type.startsWith("image/")) {
-        setErrors((prev) => ({ ...prev, image: "Please select an image file" }));
+        setErrors((prev) => ({ ...prev, image: "Veuillez sélectionner une image" }));
         return;
       }
       
       // Validate file size (5MB)
       if (file.size > 5 * 1024 * 1024) {
-        setErrors((prev) => ({ ...prev, image: "Image must be less than 5MB" }));
+        setErrors((prev) => ({ ...prev, image: "L'image doit faire moins de 5MB" }));
         return;
       }
 
@@ -114,6 +175,31 @@ export function CourseForm({ course, mode }: CourseFormProps) {
     setImagePreview(null);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+  };
+
+  // Learning outcomes handlers
+  const addLearningOutcome = () => {
+    if (newOutcome.trim()) {
+      setFormData((prev) => ({
+        ...prev,
+        learning_outcomes: [...(prev.learning_outcomes || []), newOutcome.trim()],
+      }));
+      setNewOutcome("");
+    }
+  };
+
+  const removeLearningOutcome = (index: number) => {
+    setFormData((prev) => ({
+      ...prev,
+      learning_outcomes: prev.learning_outcomes?.filter((_, i) => i !== index) || [],
+    }));
+  };
+
+  const handleOutcomeKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addLearningOutcome();
     }
   };
 
@@ -132,8 +218,8 @@ export function CourseForm({ course, mode }: CourseFormProps) {
       newErrors.description = "La description doit contenir au moins 10 caractères";
     }
 
-    if (formData.price < 0) {
-      newErrors.price = "Le prix ne peut pas être négatif";
+    if (!formData.department) {
+      newErrors.department = "Le département est requis";
     }
 
     if (!formData.max_seats || formData.max_seats < 1) {
@@ -183,8 +269,8 @@ export function CourseForm({ course, mode }: CourseFormProps) {
       )}
 
       {/* Image Upload */}
-      <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 p-6">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+      <div className="card-elevated p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
           Image de la Formation
         </h2>
         
@@ -241,8 +327,8 @@ export function CourseForm({ course, mode }: CourseFormProps) {
       </div>
 
       {/* Basic Info */}
-      <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 p-6">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+      <div className="card-elevated p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
           Informations Générales
         </h2>
 
@@ -251,23 +337,23 @@ export function CourseForm({ course, mode }: CourseFormProps) {
           <div>
             <label
               htmlFor="title"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+              className="block text-sm font-medium text-muted-foreground mb-2"
             >
               Titre *
             </label>
             <div className="relative">
-              <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
               <input
                 type="text"
                 id="title"
                 name="title"
                 value={formData.title}
                 onChange={handleInputChange}
-                className={`w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
+                className={`form-input pl-10 ${
                   errors.title
-                    ? "border-red-500"
-                    : "border-slate-200 dark:border-slate-700"
-                } text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors`}
+                    ? "border-red-500 focus:ring-red-500/50"
+                    : ""
+                }`}
                 placeholder="Ex: Formation en Gestion de Projet"
               />
             </div>
@@ -280,7 +366,7 @@ export function CourseForm({ course, mode }: CourseFormProps) {
           <div>
             <label
               htmlFor="short_description"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+              className="block text-sm font-medium text-muted-foreground mb-2"
             >
               Description Courte
             </label>
@@ -291,7 +377,7 @@ export function CourseForm({ course, mode }: CourseFormProps) {
               value={formData.short_description || ""}
               onChange={handleInputChange}
               maxLength={300}
-              className="w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors"
+              className="form-input"
               placeholder="Brève description pour la carte (max 300 caractères)"
             />
           </div>
@@ -300,7 +386,7 @@ export function CourseForm({ course, mode }: CourseFormProps) {
           <div>
             <label
               htmlFor="description"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+              className="block text-sm font-medium text-muted-foreground mb-2"
             >
               Description Complète *
             </label>
@@ -310,11 +396,11 @@ export function CourseForm({ course, mode }: CourseFormProps) {
               value={formData.description}
               onChange={handleInputChange}
               rows={6}
-              className={`w-full px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
+              className={`form-input resize-none ${
                 errors.description
-                  ? "border-red-500"
-                  : "border-slate-200 dark:border-slate-700"
-              } text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors resize-none`}
+                  ? "border-red-500 focus:ring-red-500/50"
+                  : ""
+              }`}
               placeholder="Description détaillée de la formation..."
             />
             {errors.description && (
@@ -326,31 +412,173 @@ export function CourseForm({ course, mode }: CourseFormProps) {
           <div>
             <label
               htmlFor="type"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+              className="block text-sm font-medium text-muted-foreground mb-2"
             >
               Type de Formation
             </label>
             <div className="relative">
-              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
               <select
                 id="type"
                 name="type"
                 value={formData.type}
                 onChange={handleInputChange}
-                className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors appearance-none"
+                className="form-input pl-10 appearance-none"
               >
                 <option value="public">Formation Publique</option>
                 <option value="private">Formation Privée (Entreprise)</option>
               </select>
             </div>
           </div>
+
+          {/* Department - Required */}
+          <div>
+            <label
+              htmlFor="department"
+              className="block text-sm font-medium text-muted-foreground mb-2"
+            >
+              Département *
+            </label>
+            <div className="relative">
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
+              <select
+                id="department"
+                name="department"
+                value={formData.department || ""}
+                onChange={handleDepartmentChange}
+                className={`form-input pl-10 appearance-none ${
+                  errors.department ? "border-red-500 focus:ring-red-500/50" : ""
+                }`}
+              >
+                <option value="">Sélectionner un département</option>
+                {Object.entries(DEPARTMENT_DISPLAY_NAMES).map(([value, label]) => (
+                  <option key={value} value={value}>
+                    {label}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {errors.department && (
+              <p className="text-sm text-red-500 mt-1">{errors.department}</p>
+            )}
+          </div>
+
+          {/* Professor Selection - Enhanced with relevance ranking */}
+          <div>
+            <label
+              htmlFor="professor_id"
+              className="block text-sm font-medium text-muted-foreground mb-2"
+            >
+              Professeur
+            </label>
+            <div className="relative">
+              <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none z-10" />
+              <select
+                id="professor_id"
+                name="professor_id"
+                value={formData.professor_id || ""}
+                onChange={handleProfessorChange}
+                disabled={professorsLoading || !formData.department}
+                className={`form-input pl-10 appearance-none ${
+                  !formData.department ? "opacity-50 cursor-not-allowed" : ""
+                }`}
+              >
+                <option value="">
+                  {!formData.department 
+                    ? "Sélectionnez d'abord un département" 
+                    : professorsLoading 
+                      ? "Chargement..." 
+                      : "Sélectionner un professeur (optionnel)"}
+                </option>
+                {professors.length > 0 && professors.some(p => p.is_recommended) && (
+                  <optgroup label="⭐ Recommandés pour ce département">
+                    {professors.filter(p => p.is_recommended).map((prof) => (
+                      <option key={prof.id} value={prof.id}>
+                        {prof.fullname} - {prof.specialization} ({prof.courses_taught} formations)
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+                {professors.length > 0 && professors.some(p => !p.is_recommended) && (
+                  <optgroup label="Autres professeurs">
+                    {professors.filter(p => !p.is_recommended).map((prof) => (
+                      <option key={prof.id} value={prof.id}>
+                        {prof.fullname} - {prof.specialization} {prof.department_display ? `(${prof.department_display})` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+            {!formData.department ? (
+              <p className="text-sm text-muted-foreground mt-1">
+                Sélectionnez un département pour voir les professeurs disponibles
+              </p>
+            ) : professors.length > 0 && professors.some(p => p.is_recommended) ? (
+              <p className="text-sm text-emerald-600 dark:text-emerald-400 mt-1">
+                ⭐ Professeurs recommandés basés sur leur expertise et expérience dans ce domaine
+              </p>
+            ) : null}
+          </div>
         </div>
       </div>
 
-      {/* Pricing & Capacity */}
-      <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 p-6">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
-          Prix et Capacité
+      {/* Learning Outcomes */}
+      <div className="card-elevated p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
+          Ce que vous apprendrez
+        </h2>
+        <p className="text-sm text-muted-foreground mb-4">
+          Ajoutez les compétences et connaissances que les participants acquerront
+        </p>
+
+        {/* Existing outcomes */}
+        {formData.learning_outcomes && formData.learning_outcomes.length > 0 && (
+          <ul className="space-y-2 mb-4">
+            {formData.learning_outcomes.map((outcome, index) => (
+              <li 
+                key={index}
+                className="flex items-center gap-3 p-3 bg-primary-50 dark:bg-primary-900/20 rounded-lg border border-primary-200 dark:border-primary-800"
+              >
+                <CheckCircle2 className="w-5 h-5 text-primary-500 shrink-0" />
+                <span className="flex-1 text-foreground">{outcome}</span>
+                <button
+                  type="button"
+                  onClick={() => removeLearningOutcome(index)}
+                  className="p-1 text-red-500 hover:bg-red-100 dark:hover:bg-red-900/30 rounded transition-colors"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {/* Add new outcome */}
+        <div className="flex gap-2">
+          <input
+            type="text"
+            value={newOutcome}
+            onChange={(e) => setNewOutcome(e.target.value)}
+            onKeyDown={handleOutcomeKeyDown}
+            placeholder="Ex: Maîtriser les bases de la gestion de projet"
+            className="form-input flex-1"
+          />
+          <button
+            type="button"
+            onClick={addLearningOutcome}
+            disabled={!newOutcome.trim()}
+            className="btn-primary px-4 py-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            <Plus className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Capacity */}
+      <div className="card-elevated p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
+          Capacité
         </h2>
 
         {/* Show warning if editing is restricted */}
@@ -363,60 +591,24 @@ export function CourseForm({ course, mode }: CourseFormProps) {
                   Modification restreinte
                 </p>
                 <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-                  {editability.reason || "Impossible de modifier le prix et les places après des réservations."}
+                  {editability.reason || "Impossible de modifier les places après des réservations."}
                 </p>
               </div>
             </div>
           </div>
         )}
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* Price */}
-          <div>
-            <label
-              htmlFor="price"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
-            >
-              Prix (DT) *
-            </label>
-            <div className="relative">
-              <DollarSign className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-              <input
-                type="number"
-                id="price"
-                name="price"
-                value={formData.price}
-                onChange={handleInputChange}
-                min="0"
-                step="100"
-                disabled={mode === "edit" && editability?.has_bookings}
-                className={`w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
-                  errors.price
-                    ? "border-red-500"
-                    : "border-slate-200 dark:border-slate-700"
-                } text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors ${
-                  mode === "edit" && editability?.has_bookings
-                    ? "opacity-50 cursor-not-allowed"
-                    : ""
-                }`}
-                placeholder="25000"
-              />
-            </div>
-            {errors.price && (
-              <p className="text-sm text-red-500 mt-1">{errors.price}</p>
-            )}
-          </div>
-
+        <div className="max-w-md">
           {/* Max Seats */}
           <div>
             <label
               htmlFor="max_seats"
-              className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+              className="block text-sm font-medium text-muted-foreground mb-2"
             >
               Places Disponibles *
             </label>
             <div className="relative">
-              <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+              <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
               <input
                 type="number"
                 id="max_seats"
@@ -425,11 +617,11 @@ export function CourseForm({ course, mode }: CourseFormProps) {
                 onChange={handleInputChange}
                 min="1"
                 disabled={mode === "edit" && editability?.has_bookings}
-                className={`w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border ${
+                className={`form-input pl-10 ${
                   errors.max_seats
-                    ? "border-red-500"
-                    : "border-slate-200 dark:border-slate-700"
-                } text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors ${
+                    ? "border-red-500 focus:ring-red-500/50"
+                    : ""
+                } ${
                   mode === "edit" && editability?.has_bookings
                     ? "opacity-50 cursor-not-allowed"
                     : ""
@@ -445,20 +637,20 @@ export function CourseForm({ course, mode }: CourseFormProps) {
       </div>
 
       {/* Duration */}
-      <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 p-6">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+      <div className="card-elevated p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
           Durée de la Formation
         </h2>
 
         <div className="max-w-md">
           <label
             htmlFor="duration_hours"
-            className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2"
+            className="block text-sm font-medium text-muted-foreground mb-2"
           >
             Durée totale (heures)
           </label>
           <div className="relative">
-            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
             <input
               type="number"
               id="duration_hours"
@@ -466,19 +658,19 @@ export function CourseForm({ course, mode }: CourseFormProps) {
               value={formData.duration_hours || ""}
               onChange={handleInputChange}
               min="1"
-              className="w-full pl-10 pr-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 text-slate-900 dark:text-white focus:outline-none focus:border-purple-500 transition-colors"
+              className="form-input pl-10"
               placeholder="24"
             />
           </div>
-          <p className="text-sm text-slate-500 dark:text-slate-400 mt-2">
+          <p className="text-sm text-muted-foreground mt-2">
             Les dates et horaires seront définis lors de la création des sessions de disponibilité.
           </p>
         </div>
       </div>
 
       {/* Publishing */}
-      <div className="bg-white dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-700/50 p-6">
-        <h2 className="text-lg font-semibold text-slate-900 dark:text-white mb-4">
+      <div className="card-elevated p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-4">
           Publication
         </h2>
 
@@ -488,9 +680,9 @@ export function CourseForm({ course, mode }: CourseFormProps) {
             name="is_published"
             checked={formData.is_published}
             onChange={handleCheckboxChange}
-            className="w-5 h-5 rounded border-slate-300 text-purple-500 focus:ring-purple-500"
+            className="w-5 h-5 rounded border-border text-primary-500 focus:ring-primary-500"
           />
-          <span className="text-slate-700 dark:text-slate-300">
+          <span className="text-muted-foreground">
             Publier cette formation (visible sur le site)
           </span>
         </label>
@@ -501,14 +693,14 @@ export function CourseForm({ course, mode }: CourseFormProps) {
         <button
           type="button"
           onClick={() => router.back()}
-          className="px-6 py-3 rounded-xl border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-white font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          className="btn-secondary px-6 py-3"
         >
           Annuler
         </button>
         <button
           type="submit"
           disabled={isSubmitting}
-          className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white font-medium hover:opacity-90 transition-opacity disabled:opacity-50 disabled:cursor-not-allowed"
+          className="btn-primary px-6 py-3"
         >
           {isSubmitting ? (
             <>

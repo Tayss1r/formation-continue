@@ -2,20 +2,19 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
-  BookOpen,
   Plus,
-  LogOut,
   Menu,
   X,
   GraduationCap,
   ChevronLeft,
   FileText,
+  Settings,
+  LogOut,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { ThemeToggle } from "@/components/ThemeToggle";
 
 const navItems = [
   {
@@ -28,34 +27,45 @@ const navItems = [
     href: "/employee/enroll",
     icon: Plus,
   },
+  {
+    label: "Mes Documents",
+    href: "/employee/materials",
+    icon: FileText,
+  },
+  {
+    label: "Paramètres",
+    href: "/employee/settings",
+    icon: Settings,
+  },
 ];
 
 export function EmployeeSidebar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const router = useRouter();
+  const { logout } = useAuth();
 
   const handleLogout = async () => {
     await logout();
-    window.location.href = "/";
+    router.push("/");
   };
 
   return (
     <>
       {/* Mobile Menu Button */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card px-4 py-3">
         <div className="flex items-center justify-between">
           <Link href="/employee/dashboard" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-bold text-slate-900 dark:text-white">
+            <span className="text-lg font-bold text-foreground">
               Espace Employé
             </span>
           </Link>
           <button
             onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-            className="p-2 text-slate-700 dark:text-white"
+            className="p-2 text-foreground"
           >
             {isMobileMenuOpen ? (
               <X className="w-6 h-6" />
@@ -76,22 +86,22 @@ export function EmployeeSidebar() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-card transform transition-transform duration-300 lg:translate-x-0 ${
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+          <div className="p-6">
             <Link href="/employee/dashboard" className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-primary">
                 <GraduationCap className="w-6 h-6 text-white" />
               </div>
               <div>
-                <span className="text-lg font-bold text-slate-900 dark:text-white block">
+                <span className="text-lg font-bold text-foreground block">
                   Formation
                 </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">
+                <span className="text-xs text-muted-foreground">
                   Espace Employé
                 </span>
               </div>
@@ -99,10 +109,10 @@ export function EmployeeSidebar() {
           </div>
 
           {/* Back to Site */}
-          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+          <div className="px-4 py-3">
             <Link
               href="/"
-              className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-purple-500 dark:hover:text-purple-400 transition-colors"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
               Retour au site
@@ -121,8 +131,8 @@ export function EmployeeSidebar() {
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
                     isActive
-                      ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
-                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? "bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`}
                 >
                   <item.icon className="w-5 h-5" />
@@ -132,35 +142,11 @@ export function EmployeeSidebar() {
             })}
           </nav>
 
-          {/* User Info & Actions */}
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-            {/* User Info */}
-            <div className="flex items-center gap-3 px-4 py-3 mb-3">
-              <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-medium">
-                {user?.email?.charAt(0).toUpperCase() || "U"}
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
-                  {user?.first_name || user?.email}
-                </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                  {user?.email}
-                </p>
-              </div>
-            </div>
-
-            {/* Theme Toggle */}
-            <div className="flex items-center justify-between px-4 py-2 mb-2">
-              <span className="text-sm text-slate-600 dark:text-slate-400">
-                Thème
-              </span>
-              <ThemeToggle />
-            </div>
-
-            {/* Logout Button */}
+          {/* Logout */}
+          <div className="p-4">
             <button
               onClick={handleLogout}
-              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-red-500 hover:bg-red-50 dark:hover:bg-red-500/10 transition-colors"
+              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-muted-foreground hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-colors"
             >
               <LogOut className="w-5 h-5" />
               <span className="font-medium">Déconnexion</span>

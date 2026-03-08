@@ -9,7 +9,7 @@ const inter = Inter({
 });
 
 export const metadata: Metadata = {
-  title: "Formation Continue - Université",
+  title: "Formation Continue - ISET Rades",
   description: "Bureau de Formation Continue - Formations professionnelles de qualité dispensées par des experts universitaires.",
 };
 

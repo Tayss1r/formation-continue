@@ -1,19 +1,29 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Menu, X, GraduationCap, User, LogOut } from "lucide-react";
+import { Menu, X, GraduationCap, User, LogOut, ChevronDown } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 
 export function Header() {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [scrolled, setScrolled] = useState(false);
   const { user, isAuthenticated, logout } = useAuth();
+
+  // Handle scroll effect
+  useEffect(() => {
+    const handleScroll = () => {
+      setScrolled(window.scrollY > 20);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
 
   const navLinks = [
     { name: "Accueil", href: "/" },
     { name: "Formations", href: "/courses" },
-    { name: "À Propos", href: "#about" },
+    { name: "Comment ça marche", href: "#how-it-works" },
     { name: "Contact", href: "#contact" },
   ];
 
@@ -23,26 +33,30 @@ export function Header() {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 backdrop-blur-md bg-white/80 dark:bg-[#020817]/80 border-b border-slate-200 dark:border-slate-800/50 transition-colors duration-300">
+    <nav className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      scrolled 
+        ? "bg-white/95 dark:bg-[#0a0f1a]/95 backdrop-blur-md shadow-soft border-b border-slate-200/50 dark:border-slate-800/50" 
+        : "bg-transparent"
+    }`}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex items-center justify-between h-16">
+        <div className="flex items-center justify-between h-18 py-4">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-white" />
+          <Link href="/" className="flex items-center gap-2.5">
+            <div className="w-10 h-10 rounded-xl bg-primary-600 flex items-center justify-center shadow-primary">
+              <GraduationCap className="w-6 h-6 text-white" />
             </div>
-            <span className="text-xl font-bold text-slate-900 dark:text-white">
-              Formation
+            <span className="text-xl font-bold text-foreground">
+              Forminy
             </span>
           </Link>
 
           {/* Desktop Nav Links */}
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden md:flex items-center gap-1">
             {navLinks.map((link) => (
               <Link
                 key={link.name}
                 href={link.href}
-                className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
+                className="px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors text-sm font-medium"
               >
                 {link.name}
               </Link>
@@ -57,7 +71,16 @@ export function Header() {
                 {(user?.role === "staff" || user?.role === "admin") && (
                   <Link
                     href="/staff"
-                    className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors text-sm font-medium"
+                  >
+                    <User className="w-4 h-4" />
+                    Tableau de bord
+                  </Link>
+                )}
+                {user?.role === "coordinator" && (
+                  <Link
+                    href="/coordinator"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors text-sm font-medium"
                   >
                     <User className="w-4 h-4" />
                     Tableau de bord
@@ -66,7 +89,7 @@ export function Header() {
                 {user?.role === "employee" && (
                   <Link
                     href="/employee/dashboard"
-                    className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors text-sm font-medium"
                   >
                     <User className="w-4 h-4" />
                     Mes inscriptions
@@ -75,7 +98,7 @@ export function Header() {
                 {user?.role === "company" && (
                   <Link
                     href="/dashboard"
-                    className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
+                    className="flex items-center gap-2 px-4 py-2 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors text-sm font-medium"
                   >
                     <User className="w-4 h-4" />
                     Mon espace
@@ -83,7 +106,7 @@ export function Header() {
                 )}
                 <button
                   onClick={handleLogout}
-                  className="flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors text-sm font-medium"
+                  className="flex items-center gap-2 px-4 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors text-sm font-medium"
                 >
                   <LogOut className="w-4 h-4" />
                   Déconnexion
@@ -93,13 +116,13 @@ export function Header() {
               <>
                 <Link
                   href="/login"
-                  className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
+                  className="px-4 py-2.5 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 transition-colors text-sm font-medium"
                 >
                   Connexion
                 </Link>
                 <Link
                   href="/login"
-                  className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white text-sm font-medium hover:opacity-90 transition-opacity"
+                  className="btn-primary text-sm px-5 py-2.5"
                 >
                   S&apos;inscrire
                 </Link>
@@ -111,8 +134,9 @@ export function Header() {
           <div className="flex md:hidden items-center gap-2">
             <ThemeToggle />
             <button
-              className="text-slate-900 dark:text-white p-2"
+              className="p-2 rounded-lg text-foreground hover:bg-muted transition-colors"
               onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
+              aria-label="Toggle menu"
             >
               {mobileMenuOpen ? (
                 <X className="w-6 h-6" />
@@ -125,26 +149,36 @@ export function Header() {
 
         {/* Mobile Menu */}
         {mobileMenuOpen && (
-          <div className="md:hidden py-4 border-t border-slate-200 dark:border-slate-800/50">
-            <div className="flex flex-col gap-4">
+          <div className="md:hidden py-4 border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-[#0a0f1a]">
+            <div className="flex flex-col gap-1">
               {navLinks.map((link) => (
                 <Link
                   key={link.name}
                   href={link.href}
-                  className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
+                  className="px-4 py-3 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors text-sm font-medium"
                   onClick={() => setMobileMenuOpen(false)}
                 >
                   {link.name}
                 </Link>
               ))}
-              <div className="flex flex-col gap-2 pt-4 border-t border-slate-200 dark:border-slate-800/50">
+              <div className="flex flex-col gap-2 pt-4 mt-2 border-t border-slate-200 dark:border-slate-800">
                 {isAuthenticated ? (
                   <>
                     {(user?.role === "staff" || user?.role === "admin") && (
                       <Link
                         href="/staff"
                         onClick={() => setMobileMenuOpen(false)}
-                        className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
+                        className="flex items-center gap-2 px-4 py-3 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors text-sm font-medium"
+                      >
+                        <User className="w-4 h-4" />
+                        Tableau de bord
+                      </Link>
+                    )}
+                    {user?.role === "coordinator" && (
+                      <Link
+                        href="/coordinator"
+                        onClick={() => setMobileMenuOpen(false)}
+                        className="flex items-center gap-2 px-4 py-3 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors text-sm font-medium"
                       >
                         <User className="w-4 h-4" />
                         Tableau de bord
@@ -154,7 +188,7 @@ export function Header() {
                       <Link
                         href="/employee/dashboard"
                         onClick={() => setMobileMenuOpen(false)}
-                        className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
+                        className="flex items-center gap-2 px-4 py-3 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors text-sm font-medium"
                       >
                         <User className="w-4 h-4" />
                         Mes inscriptions
@@ -164,7 +198,7 @@ export function Header() {
                       <Link
                         href="/dashboard"
                         onClick={() => setMobileMenuOpen(false)}
-                        className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium"
+                        className="flex items-center gap-2 px-4 py-3 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors text-sm font-medium"
                       >
                         <User className="w-4 h-4" />
                         Mon espace
@@ -175,7 +209,7 @@ export function Header() {
                         setMobileMenuOpen(false);
                         handleLogout();
                       }}
-                      className="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium text-left"
+                      className="flex items-center gap-2 px-4 py-3 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors text-sm font-medium text-left"
                     >
                       <LogOut className="w-4 h-4" />
                       Déconnexion
@@ -186,14 +220,14 @@ export function Header() {
                     <Link
                       href="/login"
                       onClick={() => setMobileMenuOpen(false)}
-                      className="text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white transition-colors text-sm font-medium text-left"
+                      className="px-4 py-3 rounded-lg text-slate-600 dark:text-slate-300 hover:text-primary-600 dark:hover:text-primary-400 hover:bg-primary-50 dark:hover:bg-primary-900/20 transition-colors text-sm font-medium text-left"
                     >
                       Connexion
                     </Link>
                     <Link
                       href="/login"
                       onClick={() => setMobileMenuOpen(false)}
-                      className="px-4 py-2 rounded-lg bg-gradient-to-r from-indigo-500 via-purple-500 to-pink-500 text-white text-sm font-medium text-center"
+                      className="btn-primary text-sm text-center mx-4"
                     >
                       S&apos;inscrire
                     </Link>

@@ -2,28 +2,34 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   LayoutDashboard,
   BookOpen,
   Plus,
-  Settings,
-  LogOut,
   Menu,
   X,
   GraduationCap,
   ChevronLeft,
   CalendarCheck,
   ClipboardList,
+  Newspaper,
+  ShieldCheck,
+  Settings,
+  LogOut,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { ThemeToggle } from "@/components/ThemeToggle";
 
 const navItems = [
   {
     label: "Tableau de Bord",
     href: "/staff",
     icon: LayoutDashboard,
+  },
+  {
+    label: "Vérifications",
+    href: "/staff/verifications",
+    icon: ShieldCheck,
   },
   {
     label: "Mes Formations",
@@ -41,6 +47,11 @@ const navItems = [
     icon: ClipboardList,
   },
   {
+    label: "Actualités",
+    href: "/staff/news",
+    icon: Newspaper,
+  },
+  {
     label: "Nouvelle Formation",
     href: "/staff/courses/new",
     icon: Plus,
@@ -55,23 +66,24 @@ const navItems = [
 export function StaffSidebar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
-  const { user, logout } = useAuth();
+  const router = useRouter();
+  const { logout } = useAuth();
 
   const handleLogout = async () => {
     await logout();
-    window.location.href = "/";
+    router.push("/");
   };
 
   return (
     <>
       {/* Mobile Menu Button */}
-      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 px-4 py-3">
+      <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card px-4 py-3">
         <div className="flex items-center justify-between">
           <Link href="/staff" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
               <GraduationCap className="w-5 h-5 text-white" />
             </div>
-            <span className="text-lg font-bold text-slate-900 dark:text-white">
+            <span className="text-lg font-bold text-foreground">
               Staff Portal
             </span>
           </Link>
@@ -98,22 +110,22 @@ export function StaffSidebar() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 transform transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-card transform transition-transform duration-300 lg:translate-x-0 ${
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="p-6 border-b border-slate-200 dark:border-slate-800">
+          <div className="p-6">
             <Link href="/staff" className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-indigo-500 via-purple-500 to-pink-500 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-primary">
                 <GraduationCap className="w-6 h-6 text-white" />
               </div>
               <div>
-                <span className="text-lg font-bold text-slate-900 dark:text-white block">
+                <span className="text-lg font-bold text-foreground block">
                   Formation
                 </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">
+                <span className="text-xs text-muted-foreground">
                   Espace Staff
                 </span>
               </div>
@@ -121,10 +133,10 @@ export function StaffSidebar() {
           </div>
 
           {/* Back to Site */}
-          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800">
+          <div className="px-4 py-3">
             <Link
               href="/"
-              className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-purple-500 dark:hover:text-purple-400 transition-colors"
+              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
             >
               <ChevronLeft className="w-4 h-4" />
               Retour au site
@@ -142,8 +154,8 @@ export function StaffSidebar() {
                   onClick={() => setIsMobileMenuOpen(false)}
                   className={`flex items-center gap-3 px-4 py-3 rounded-xl transition-colors ${
                     isActive
-                      ? "bg-purple-500/10 text-purple-600 dark:text-purple-400"
-                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                      ? "bg-primary-100 dark:bg-primary-900/30 text-primary-700 dark:text-primary-400"
+                      : "text-muted-foreground hover:bg-muted hover:text-foreground"
                   }`}
                 >
                   <item.icon className="w-5 h-5" />
@@ -153,39 +165,15 @@ export function StaffSidebar() {
             })}
           </nav>
 
-          {/* User Section */}
-          <div className="p-4 border-t border-slate-200 dark:border-slate-800">
-            {/* Theme Toggle */}
-            <div className="flex items-center justify-between mb-4 px-4 py-2">
-              <span className="text-sm text-slate-600 dark:text-slate-400">
-                Thème
-              </span>
-              <ThemeToggle />
-            </div>
-
-            {/* User Info */}
-            <div className="px-4 py-3 rounded-xl bg-slate-50 dark:bg-slate-800/50">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center text-white font-medium">
-                  {user?.email?.charAt(0).toUpperCase()}
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-slate-900 dark:text-white truncate">
-                    {user?.email}
-                  </p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 capitalize">
-                    {user?.role}
-                  </p>
-                </div>
-              </div>
-              <button
-                onClick={handleLogout}
-                className="flex items-center gap-2 w-full px-3 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-              >
-                <LogOut className="w-4 h-4" />
-                Déconnexion
-              </button>
-            </div>
+          {/* Logout */}
+          <div className="p-4">
+            <button
+              onClick={handleLogout}
+              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-muted-foreground hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-colors"
+            >
+              <LogOut className="w-5 h-5" />
+              <span className="font-medium">Déconnexion</span>
+            </button>
           </div>
         </div>
       </aside>

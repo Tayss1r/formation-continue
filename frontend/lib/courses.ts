@@ -1,11 +1,47 @@
 import { apiClient } from "./api";
-import type { Course, CourseListResponse, CourseCreateData, CourseUpdateData, CourseEditability } from "@/types/course";
+import type { 
+  Course, 
+  CourseListResponse, 
+  CourseCreateData, 
+  CourseUpdateData, 
+  CourseEditability,
+  Department,
+  ProfessorListItem,
+  ProfessorListResponse
+} from "@/types/course";
+
+// Department types for API responses
+export interface DepartmentInfo {
+  value: Department;
+  label: string;
+}
+
+export interface DepartmentListResponse {
+  departments: DepartmentInfo[];
+}
+
+// Get all departments
+export async function getDepartments(): Promise<DepartmentListResponse> {
+  return apiClient.get<DepartmentListResponse>("/courses/departments");
+}
+
+// Get professors list, optionally filtered by department
+export async function getProfessors(department?: Department): Promise<ProfessorListResponse> {
+  const params = new URLSearchParams();
+  if (department) {
+    params.append("department", department);
+  }
+  const queryString = params.toString();
+  const url = queryString ? `/courses/professors?${queryString}` : "/courses/professors";
+  return apiClient.get<ProfessorListResponse>(url);
+}
 
 // Public endpoints (no auth required)
 export async function getPublicCourses(
   page = 1,
   perPage = 12,
-  courseType?: string
+  courseType?: string,
+  department?: Department
 ): Promise<CourseListResponse> {
   const params = new URLSearchParams({
     page: page.toString(),
@@ -14,6 +50,10 @@ export async function getPublicCourses(
   
   if (courseType) {
     params.append("course_type", courseType);
+  }
+  
+  if (department) {
+    params.append("department", department);
   }
 
   return apiClient.get<CourseListResponse>(`/courses/public?${params.toString()}`);
@@ -70,17 +110,17 @@ export async function createCourse(
   if (data.duration_hours) {
     formData.append("duration_hours", data.duration_hours.toString());
   }
-  if (data.schedule) {
-    formData.append("schedule", data.schedule);
-  }
-  if (data.start_date) {
-    formData.append("start_date", data.start_date);
-  }
-  if (data.end_date) {
-    formData.append("end_date", data.end_date);
+  if (data.sector) {
+    formData.append("sector", data.sector);
   }
   if (data.professor_id) {
     formData.append("professor_id", data.professor_id.toString());
+  }
+  if (data.department) {
+    formData.append("department", data.department);
+  }
+  if (data.learning_outcomes && data.learning_outcomes.length > 0) {
+    formData.append("learning_outcomes", JSON.stringify(data.learning_outcomes));
   }
   if (data.is_published !== undefined) {
     formData.append("is_published", data.is_published.toString());
@@ -109,10 +149,12 @@ export async function updateCourse(
   if (data.type) formData.append("type", data.type);
   if (data.short_description) formData.append("short_description", data.short_description);
   if (data.duration_hours) formData.append("duration_hours", data.duration_hours.toString());
-  if (data.schedule) formData.append("schedule", data.schedule);
-  if (data.start_date) formData.append("start_date", data.start_date);
-  if (data.end_date) formData.append("end_date", data.end_date);
+  if (data.sector) formData.append("sector", data.sector);
   if (data.professor_id) formData.append("professor_id", data.professor_id.toString());
+  if (data.department) formData.append("department", data.department);
+  if (data.learning_outcomes && data.learning_outcomes.length > 0) {
+    formData.append("learning_outcomes", JSON.stringify(data.learning_outcomes));
+  }
   if (data.is_published !== undefined) formData.append("is_published", data.is_published.toString());
   
   // Add image if provided
