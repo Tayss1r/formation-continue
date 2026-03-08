@@ -40,11 +40,13 @@ export interface Application {
   company_id: number;
   status: ApplicationStatus;
   motivation_letter?: string;
+  proposed_employee_count?: number;
   additional_notes?: string;
   submitted_at?: string;
   reviewed_at?: string;
   coordinator_decision?: string;
   decision_notes?: string;
+  call?: ApplicationCall;
   company?: ApplicationCompany;
   documents: ApplicationDocument[];
 }
@@ -56,8 +58,13 @@ export interface ApplicationWithCall extends Application {
 // Create interfaces
 export interface ApplicationCreate {
   call_id: number;
+  proposed_employee_count: number;
   motivation_letter?: string;
-  additional_notes?: string;
+}
+
+export interface ApplicationUpdate {
+  proposed_employee_count?: number;
+  motivation_letter?: string;
 }
 
 // Action interfaces

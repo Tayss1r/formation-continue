@@ -305,12 +305,18 @@ export default function CoordinatorDashboard() {
                     <p className="text-sm text-foreground font-medium">
                       {formatActivityLabel(activity.action, activity.entity_type)}
                     </p>
+                    {activity.entity_name && (
+                      <p className="text-xs text-muted-foreground mt-0.5 truncate font-medium">
+                        {activity.entity_name}
+                      </p>
+                    )}
                     {activity.notes && (
                       <p className="text-xs text-muted-foreground mt-0.5 truncate">
                         {activity.notes}
                       </p>
                     )}
                     <p className="text-xs text-muted-foreground mt-1">
+                      {activity.user_name && <span className="mr-1">· {activity.user_name}</span>}
                       {new Date(activity.created_at).toLocaleString('fr-FR', {
                         day: 'numeric',
                         month: 'short',

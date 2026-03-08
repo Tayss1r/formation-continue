@@ -505,8 +505,6 @@ function DepartmentsSection() {
 
 // ============ ACTIVE CALLS SECTION ============
 function ActiveCallsSection() {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-100px" });
   const [calls, setCalls] = useState<CallPublic[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -541,11 +539,12 @@ function ActiveCallsSection() {
 
   if (calls.length === 0) {
     return (
-      <section id="active-calls" className="py-16 lg:py-20 bg-slate-50 dark:bg-slate-900/50" ref={ref}>
+      <section id="active-calls" className="py-16 lg:py-20 bg-slate-50 dark:bg-slate-900/50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <motion.div
             initial="hidden"
-            animate={isInView ? "visible" : "hidden"}
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
             variants={fadeUpVariant}
             className="text-center"
           >
@@ -568,12 +567,13 @@ function ActiveCallsSection() {
   }
 
   return (
-    <section id="active-calls" className="py-16 lg:py-20 bg-slate-50 dark:bg-slate-900/50" ref={ref}>
+    <section id="active-calls" className="py-16 lg:py-20 bg-slate-50 dark:bg-slate-900/50">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <motion.div
           initial="hidden"
-          animate={isInView ? "visible" : "hidden"}
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
           variants={fadeUpVariant}
           className="text-center mb-12"
         >
@@ -588,7 +588,8 @@ function ActiveCallsSection() {
         {/* Calls Grid */}
         <motion.div 
           initial="hidden"
-          animate={isInView ? "visible" : "hidden"}
+          whileInView="visible"
+          viewport={{ once: true, margin: "-100px" }}
           variants={staggerContainer}
           className="grid md:grid-cols-2 lg:grid-cols-3 gap-6"
         >
@@ -662,7 +663,8 @@ function ActiveCallsSection() {
         {calls.length > 6 && (
           <motion.div 
             initial="hidden"
-            animate={isInView ? "visible" : "hidden"}
+            whileInView="visible"
+            viewport={{ once: true, margin: "-100px" }}
             variants={fadeUpVariant}
             className="text-center mt-10"
           >

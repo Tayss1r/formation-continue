@@ -190,6 +190,8 @@ class RecentActivityItem(BaseModel):
     action: str
     entity_type: str
     entity_id: int
+    entity_name: Optional[str] = None
+    user_name: Optional[str] = None
     old_status: Optional[str] = None
     new_status: Optional[str] = None
     notes: Optional[str] = None

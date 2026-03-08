@@ -1,17 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import {
   ArrowLeft,
   Search,
-  Filter,
   Eye,
   CheckCircle,
   XCircle,
-  MessageSquare,
-  MoreVertical,
   Building2,
   FileText,
   Calendar,
@@ -19,11 +16,14 @@ import {
   Users,
 } from "lucide-react";
 import { getCallDetails } from "@/lib/calls";
-import { getCallApplications, approveApplication, rejectApplication, requestAdditionalInfo } from "@/lib/applications";
-import { StatusBadge, SearchInput, FilterSelect, Pagination, TableSkeleton, EmptyState, ConfirmDialog } from "@/components/coordinator/CoordinatorUI";
+import { getCallApplications, approveApplication, rejectApplication } from "@/lib/applications";
+import { StatusBadge, SearchInput, FilterSelect, Pagination, TableSkeleton, EmptyState } from "@/components/coordinator/CoordinatorUI";
 import type { Call } from "@/types/call";
 import type { Application } from "@/types/application";
-import { APPLICATION_STATUS_LABELS } from "@/types/application";
+
+interface ApplicationListItem extends Application {
+  documents_count?: number;
+}
 
 const statusOptions = [
   { value: 'pending', label: 'En attente' },
@@ -36,12 +36,11 @@ const statusOptions = [
 
 export default function CallApplicationsPage() {
   const params = useParams();
-  const router = useRouter();
   const callId = Number(params.id);
   
   const [call, setCall] = useState<Call | null>(null);
-  const [applications, setApplications] = useState<Application[]>([]);
-  const [filteredApps, setFilteredApps] = useState<Application[]>([]);
+  const [applications, setApplications] = useState<ApplicationListItem[]>([]);
+  const [filteredApps, setFilteredApps] = useState<ApplicationListItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   
@@ -54,11 +53,10 @@ export default function CallApplicationsPage() {
   const itemsPerPage = 10;
   
   // Action states
-  const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionDialog, setActionDialog] = useState<{
-    type: 'approve' | 'reject' | 'request_info';
+    type: 'approve' | 'reject';
     applicationId: number;
     notes: string;
   } | null>(null);
@@ -72,13 +70,6 @@ export default function CallApplicationsPage() {
   useEffect(() => {
     filterApplications();
   }, [applications, searchQuery, statusFilter]);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClick = () => setActiveDropdown(null);
-    document.addEventListener("click", handleClick);
-    return () => document.removeEventListener("click", handleClick);
-  }, []);
 
   async function fetchData() {
     setIsLoading(true);
@@ -126,6 +117,8 @@ export default function CallApplicationsPage() {
   // Action handlers
   async function handleApprove() {
     if (!actionDialog) return;
+    const confirmed = window.confirm("Êtes-vous sûr de vouloir approuver cette candidature ?");
+    if (!confirmed) return;
     
     setIsActionLoading(true);
     try {
@@ -145,6 +138,8 @@ export default function CallApplicationsPage() {
 
   async function handleReject() {
     if (!actionDialog) return;
+    const confirmed = window.confirm("Êtes-vous sûr de vouloir rejeter cette candidature ?");
+    if (!confirmed) return;
     
     setIsActionLoading(true);
     try {
@@ -157,24 +152,6 @@ export default function CallApplicationsPage() {
     } catch (err) {
       console.error("Error rejecting:", err);
       setActionError("Erreur lors du rejet");
-    } finally {
-      setIsActionLoading(false);
-    }
-  }
-
-  async function handleRequestInfo() {
-    if (!actionDialog) return;
-    
-    setIsActionLoading(true);
-    try {
-      await requestAdditionalInfo(actionDialog.applicationId, {
-        message: actionDialog.notes,
-      });
-      fetchData();
-      setActionDialog(null);
-    } catch (err) {
-      console.error("Error requesting info:", err);
-      setActionError("Erreur lors de la demande d'informations");
     } finally {
       setIsActionLoading(false);
     }
@@ -361,7 +338,7 @@ export default function CallApplicationsPage() {
                       <td className="p-4 text-center">
                         <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
                           <FileText className="w-4 h-4" />
-                          {app.documents?.length || 0}
+                          {app.documents_count ?? app.documents?.length ?? 0}
                         </span>
                       </td>
                       <td className="p-4 text-sm text-muted-foreground">
@@ -371,61 +348,31 @@ export default function CallApplicationsPage() {
                         }
                       </td>
                       <td className="p-4">
-                        <div className="flex justify-end relative">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveDropdown(activeDropdown === app.id ? null : app.id);
-                            }}
-                            className="p-2 hover:bg-muted rounded-lg transition-colors"
+                        <div className="flex justify-end items-center gap-1">
+                          <Link
+                            href={`/coordinator/applications/${app.id}`}
+                            title="Voir détails"
+                            className="p-2 hover:bg-muted rounded-lg transition-colors text-muted-foreground hover:text-foreground"
                           >
-                            <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                          </button>
-                          
-                          {activeDropdown === app.id && (
-                            <div className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-xl shadow-lg py-1 z-20">
-                              <Link
-                                href={`/coordinator/applications/${app.id}`}
-                                className="flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
+                            <Eye className="w-4 h-4" />
+                          </Link>
+                          {['submitted', 'under_review'].includes(app.status) && (
+                            <>
+                              <button
+                                onClick={() => setActionDialog({ type: 'approve', applicationId: app.id, notes: '' })}
+                                title="Approuver"
+                                className="p-2 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors text-green-600"
                               >
-                                <Eye className="w-4 h-4" />
-                                Voir détails
-                              </Link>
-                              {['submitted', 'under_review'].includes(app.status) && (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      setActiveDropdown(null);
-                                      setActionDialog({ type: 'approve', applicationId: app.id, notes: '' });
-                                    }}
-                                    className="flex items-center gap-2 px-4 py-2 text-sm text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 w-full text-left transition-colors"
-                                  >
-                                    <CheckCircle className="w-4 h-4" />
-                                    Approuver
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setActiveDropdown(null);
-                                      setActionDialog({ type: 'reject', applicationId: app.id, notes: '' });
-                                    }}
-                                    className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 w-full text-left transition-colors"
-                                  >
-                                    <XCircle className="w-4 h-4" />
-                                    Rejeter
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setActiveDropdown(null);
-                                      setActionDialog({ type: 'request_info', applicationId: app.id, notes: '' });
-                                    }}
-                                    className="flex items-center gap-2 px-4 py-2 text-sm text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 w-full text-left transition-colors"
-                                  >
-                                    <MessageSquare className="w-4 h-4" />
-                                    Demander infos
-                                  </button>
-                                </>
-                              )}
-                            </div>
+                                <CheckCircle className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => setActionDialog({ type: 'reject', applicationId: app.id, notes: '' })}
+                                title="Rejeter"
+                                className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors text-red-600"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                            </>
                           )}
                         </div>
                       </td>
@@ -461,7 +408,7 @@ export default function CallApplicationsPage() {
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <FileText className="w-4 h-4" />
-                      {app.documents?.length || 0} doc(s)
+                      {app.documents_count ?? app.documents?.length ?? 0} doc(s)
                     </span>
                     <span className="flex items-center gap-1">
                       <Calendar className="w-4 h-4" />
@@ -502,26 +449,20 @@ export default function CallApplicationsPage() {
             <h3 className="text-lg font-semibold text-foreground mb-2">
               {actionDialog.type === 'approve' && 'Approuver la candidature'}
               {actionDialog.type === 'reject' && 'Rejeter la candidature'}
-              {actionDialog.type === 'request_info' && 'Demander des informations'}
             </h3>
             <p className="text-sm text-muted-foreground mb-4">
               {actionDialog.type === 'approve' && 'L\'entreprise sera notifiée de l\'approbation.'}
               {actionDialog.type === 'reject' && 'L\'entreprise sera notifiée du rejet.'}
-              {actionDialog.type === 'request_info' && 'Un message sera envoyé à l\'entreprise.'}
             </p>
             
             <div className="mb-6">
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                {actionDialog.type === 'request_info' ? 'Message *' : 'Notes (optionnel)'}
+                Notes (optionnel)
               </label>
               <textarea
                 value={actionDialog.notes}
                 onChange={(e) => setActionDialog({ ...actionDialog, notes: e.target.value })}
-                placeholder={
-                  actionDialog.type === 'request_info'
-                    ? 'Décrivez les informations supplémentaires requises...'
-                    : 'Ajouter des notes pour cette décision...'
-                }
+                placeholder="Ajouter des notes pour cette décision..."
                 rows={4}
                 className="form-input form-textarea w-full"
               />
@@ -539,15 +480,12 @@ export default function CallApplicationsPage() {
                 onClick={() => {
                   if (actionDialog.type === 'approve') handleApprove();
                   else if (actionDialog.type === 'reject') handleReject();
-                  else handleRequestInfo();
                 }}
-                disabled={isActionLoading || (actionDialog.type === 'request_info' && !actionDialog.notes.trim())}
+                disabled={isActionLoading}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2 ${
                   actionDialog.type === 'approve'
                     ? 'bg-green-600 hover:bg-green-700 text-white'
-                    : actionDialog.type === 'reject'
-                    ? 'bg-red-600 hover:bg-red-700 text-white'
-                    : 'bg-orange-600 hover:bg-orange-700 text-white'
+                    : 'bg-red-600 hover:bg-red-700 text-white'
                 }`}
               >
                 {isActionLoading && (
@@ -555,7 +493,6 @@ export default function CallApplicationsPage() {
                 )}
                 {actionDialog.type === 'approve' && 'Approuver'}
                 {actionDialog.type === 'reject' && 'Rejeter'}
-                {actionDialog.type === 'request_info' && 'Envoyer'}
               </button>
             </div>
           </div>

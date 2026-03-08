@@ -53,6 +53,8 @@ export interface RecentActivityItem {
   action: string;
   entity_type: string;
   entity_id?: number;
+  entity_name?: string;
+  user_name?: string;
   old_status?: string;
   new_status?: string;
   notes?: string;

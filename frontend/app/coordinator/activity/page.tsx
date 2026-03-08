@@ -48,13 +48,6 @@ const targetTypeOptions = [
   { value: 'EmployeeSubmission', label: 'Soumissions' },
 ];
 
-const periodOptions = [
-  { value: '7', label: '7 derniers jours' },
-  { value: '30', label: '30 derniers jours' },
-  { value: '90', label: '3 derniers mois' },
-  { value: '365', label: 'Dernière année' },
-];
-
 function getActionIcon(action: string) {
   // Extract verb from dot-notation ("call.publish" → "publish")
   const verb = action.includes('.') ? action.split('.')[1] : action;
@@ -125,7 +118,6 @@ export default function ActivityPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [actionFilter, setActionFilter] = useState("");
   const [targetFilter, setTargetFilter] = useState("");
-  const [periodFilter, setPeriodFilter] = useState("30");
   const [showFilters, setShowFilters] = useState(false);
   
   // Pagination
@@ -133,7 +125,7 @@ export default function ActivityPage() {
 
   useEffect(() => {
     fetchActivities();
-  }, [periodFilter]);
+  }, []);
 
   useEffect(() => {
     filterActivities();
@@ -143,13 +135,12 @@ export default function ActivityPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const data = await getRecentActivity(parseInt(periodFilter, 10), 200);
+      const data = await getRecentActivity(365, 200);
       // Map API response to local ActivityItem interface
       const mapped: ActivityItem[] = (data.activities || []).map(act => ({
         ...act,
-        target_name: act.entity_id
-          ? `${formatTargetType(act.entity_type)} #${act.entity_id}`
-          : undefined,
+        target_name: act.entity_name
+          || (act.entity_id ? `${formatTargetType(act.entity_type)} #${act.entity_id}` : undefined),
       }));
       setActivities(mapped);
     } catch (err) {
@@ -277,7 +268,7 @@ export default function ActivityPage() {
       <div className="hidden sm:grid grid-cols-4 gap-4">
         <div className="card-elevated p-4 text-center">
           <p className="text-xl font-bold text-foreground">{activities.length}</p>
-          <p className="text-xs text-muted-foreground">Total ({periodFilter}j)</p>
+          <p className="text-xs text-muted-foreground">Total</p>
         </div>
         <div className="card-elevated p-4 text-center">
           <p className="text-xl font-bold text-green-600">{actionCounts['approve'] || 0}</p>
@@ -320,14 +311,7 @@ export default function ActivityPage() {
                 </span>
               )}
             </button>
-            <div className="w-48">
-              <FilterSelect
-                value={periodFilter}
-                onChange={setPeriodFilter}
-                options={periodOptions}
-                placeholder="Période"
-              />
-            </div>
+
           </div>
         </div>
         
@@ -442,7 +426,7 @@ export default function ActivityPage() {
                               <User className="w-3 h-3 text-primary-600 dark:text-primary-400" />
                             </div>
                             <span className="text-xs text-muted-foreground">
-                              Utilisateur #{activity.user_id}
+                              {activity.user_name || `Utilisateur #${activity.user_id}`}
                             </span>
                           </div>
                         )}

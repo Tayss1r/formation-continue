@@ -3,6 +3,7 @@ API endpoints for Company Applications.
 """
 
 from typing import Optional
+import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -14,6 +15,7 @@ from ..services.call_service import CallService
 from ..services.audit_service import AuditService
 from ..schemas.application_schema import (
     ApplicationCreate,
+    ApplicationUpdate,
     ApplicationOut,
     ApplicationListResponse,
     ApplicationApprove,
@@ -45,10 +47,13 @@ def build_document_out(doc) -> DocumentOut:
     return DocumentOut(
         id=doc.id,
         document_type=doc.document_type,
+        document_label=doc.document_label,
         file_path=doc.file_path,
         original_filename=doc.original_filename,
+        file_size=doc.file_size,
+        mime_type=doc.mime_type,
         review_status=review_status,
-        rejection_reason=doc.rejection_reason,
+        review_notes=doc.review_notes,
         uploaded_at=doc.uploaded_at,
         reviewed_at=doc.reviewed_at,
     )
@@ -63,13 +68,27 @@ def build_application_out(app, include_documents: bool = True) -> ApplicationOut
         company_info = {
             'id': app.company.id,
             'name': app.company.name,
-            'trade_register_number': app.company.trade_register_number,
             'industry_sector': app.company.industry_sector,
+            'email': app.company.user.email if app.company.user else None,
+            'phone': None,
         }
     
     documents = []
     if include_documents and hasattr(app, 'documents') and app.documents:
         documents = [build_document_out(doc) for doc in app.documents]
+
+    call_info = None
+    if app.call:
+        dept = app.call.department.value if hasattr(app.call.department, 'value') else app.call.department
+        call_status = app.call.status.value if hasattr(app.call.status, 'value') else app.call.status
+        call_info = {
+            'id': app.call.id,
+            'title': app.call.title,
+            'reference_number': app.call.reference_number,
+            'department': dept,
+            'application_deadline': app.call.application_deadline,
+            'status': call_status,
+        }
     
     return ApplicationOut(
         id=app.id,
@@ -77,11 +96,13 @@ def build_application_out(app, include_documents: bool = True) -> ApplicationOut
         company_id=app.company_id,
         status=app_status,
         motivation_letter=app.motivation_letter,
-        additional_notes=app.additional_notes,
+        proposed_employee_count=app.proposed_employee_count,
         submitted_at=app.submitted_at,
-        reviewed_at=app.reviewed_at,
-        coordinator_decision=app.coordinator_decision,
+        updated_at=app.updated_at,
+        decision_date=app.decision_date,
         decision_notes=app.decision_notes,
+        rejection_reason=app.rejection_reason,
+        call=call_info,
         company=company_info,
         documents=documents,
     )
@@ -116,7 +137,6 @@ async def create_application(
     
     # Create application
     application = await ApplicationService.create_application(
-        call_id=application_data.call_id,
         company_id=company.id,
         application_data=application_data,
         session=session,
@@ -127,7 +147,6 @@ async def create_application(
         user=current_user,
         action="create",
         application_id=application.id,
-        call_id=application_data.call_id,
         new_status="pending",
         session=session,
     )
@@ -158,13 +177,21 @@ async def get_my_applications(
     
     apps = await ApplicationService.get_company_applications(
         company_id=company.id,
-        status=status_filter,
         session=session,
     )
+
+    if status_filter:
+        apps = [
+            app for app in apps
+            if (app.status.value if hasattr(app.status, "value") else app.status) == status_filter
+        ]
     
     return ApplicationListResponse(
         applications=[build_application_out(app) for app in apps],
         total=len(apps),
+        page=1,
+        per_page=len(apps),
+        total_pages=1 if apps else 0,
     )
 
 
@@ -196,21 +223,88 @@ async def get_my_application(
         raise ApplicationNotFound()
     
     app_out = build_application_out(app)
-    
-    call_info = None
-    if app.call:
-        dept = app.call.department.value if hasattr(app.call.department, 'value') else app.call.department
-        call_info = {
-            'id': app.call.id,
-            'title': app.call.title,
-            'reference_number': app.call.reference_number,
-            'department': dept,
-            'required_documents': app.call.required_documents,
-        }
-    
-    return ApplicationWithCallOut(
-        **app_out.model_dump(),
-        call=call_info,
+    return ApplicationWithCallOut(**app_out.model_dump())
+
+
+@applications_router.delete("/my-applications/{application_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_my_application(
+    application_id: int,
+    current_user: User = Depends(require_company),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Delete a company application if it has not been approved yet.
+    Company only.
+    """
+    company = current_user.company
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vous devez être associé à une entreprise"
+        )
+
+    app = await ApplicationService.get_application_by_id(
+        application_id=application_id,
+        session=session,
+    )
+
+    if not app or app.company_id != company.id:
+        raise ApplicationNotFound()
+
+    if app.status == ApplicationStatus.APPROVED:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Impossible de supprimer une candidature déjà approuvée"
+        )
+
+    await ApplicationService.delete_company_application(app, session)
+
+    return None
+
+
+@applications_router.put("/my-applications/{application_id}", response_model=ApplicationActionResponse)
+async def update_my_application(
+    application_id: int,
+    update_data: ApplicationUpdate,
+    current_user: User = Depends(require_company),
+    session: AsyncSession = Depends(get_session)
+):
+    """
+    Update a company application if it has not been approved or rejected.
+    Company only.
+    """
+    company = current_user.company
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vous devez être associé à une entreprise"
+        )
+
+    app = await ApplicationService.get_application_by_id(
+        application_id=application_id,
+        session=session,
+        include_documents=True,
+        include_call=True,
+    )
+
+    if not app or app.company_id != company.id:
+        raise ApplicationNotFound()
+
+    if app.status in [ApplicationStatus.APPROVED, ApplicationStatus.REJECTED]:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Impossible de modifier une candidature déjà approuvée ou rejetée"
+        )
+
+    updated_app = await ApplicationService.update_application(
+        application=app,
+        update_data=update_data,
+        session=session,
+    )
+
+    return ApplicationActionResponse(
+        message="Candidature modifiée avec succès",
+        application=build_application_out(updated_app),
     )
 
 
@@ -238,10 +332,32 @@ async def upload_document(
     if not app or app.company_id != company.id:
         raise ApplicationNotFound()
     
+    required_documents = app.call.required_documents if app.call and app.call.required_documents else []
+    matched_doc = next(
+        (doc for doc in required_documents if doc.get("type") == document_type),
+        None,
+    )
+    document_label = matched_doc.get("label") if matched_doc else document_type
+
+    upload_path = ApplicationService.get_upload_path(
+        application_id=app.id,
+        document_type=document_type,
+        filename=file.filename or f"{document_type}.pdf",
+    )
+
+    os.makedirs(os.path.dirname(upload_path), exist_ok=True)
+    content = await file.read()
+    with open(upload_path, "wb") as out_file:
+        out_file.write(content)
+
     document = await ApplicationService.upload_document(
         application=app,
         document_type=document_type,
-        file=file,
+        document_label=document_label,
+        file_path=upload_path,
+        original_filename=file.filename or os.path.basename(upload_path),
+        file_size=len(content),
+        mime_type=file.content_type or "application/octet-stream",
         session=session,
     )
     
@@ -274,20 +390,14 @@ async def delete_document(
     if not app or app.company_id != company.id:
         raise ApplicationNotFound()
     
-    # Find the document
-    document = None
-    for doc in app.documents:
-        if doc.id == document_id:
-            document = doc
-            break
-    
+    document = next((doc for doc in app.documents if doc.id == document_id), None)
     if not document:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Document non trouvé"
         )
-    
-    await ApplicationService.delete_document(document, session)
+
+    await ApplicationService.delete_document(document_id=document_id, application=app, session=session)
     
     return None
 
@@ -371,8 +481,32 @@ async def get_call_applications(
     
     total_pages = (total + per_page - 1) // per_page if per_page > 0 else 0
     
+    applications_out = []
+    for app in apps:
+        app_status = app.status.value if hasattr(app.status, 'value') else app.status
+        company_info = None
+        if app.company:
+            company_info = {
+                'id': app.company.id,
+                'name': app.company.name,
+                'industry_sector': app.company.industry_sector,
+                'email': app.company.user.email if app.company.user else None,
+                'phone': None,
+            }
+
+        applications_out.append({
+            'id': app.id,
+            'call_id': app.call_id,
+            'company_id': app.company_id,
+            'status': app_status,
+            'proposed_employee_count': app.proposed_employee_count,
+            'submitted_at': app.submitted_at,
+            'company': company_info,
+            'documents_count': len(app.documents) if hasattr(app, 'documents') and app.documents else 0,
+        })
+
     return ApplicationListResponse(
-        applications=[build_application_out(app) for app in apps],
+        applications=applications_out,
         total=total,
         page=page,
         per_page=per_page,
@@ -408,22 +542,7 @@ async def get_application_details(
             raise InsufficientPermission()
     
     app_out = build_application_out(app)
-    
-    call_info = None
-    if app.call:
-        dept = app.call.department.value if hasattr(app.call.department, 'value') else app.call.department
-        call_info = {
-            'id': app.call.id,
-            'title': app.call.title,
-            'reference_number': app.call.reference_number,
-            'department': dept,
-            'required_documents': app.call.required_documents,
-        }
-    
-    return ApplicationWithCallOut(
-        **app_out.model_dump(),
-        call=call_info,
-    )
+    return ApplicationWithCallOut(**app_out.model_dump())
 
 
 @applications_router.post("/{application_id}/documents/{document_id}/review", response_model=DocumentActionResponse)

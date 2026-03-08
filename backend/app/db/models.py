@@ -13,7 +13,7 @@ Key Entities:
 - AuditLog: Traceability for all decisions
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, List
 from enum import Enum
 from .database import Base
@@ -667,6 +667,7 @@ class CompanyApplication(Base):
     submitted_at: Mapped[datetime] = mapped_column(
         TIMESTAMP(timezone=True),
         server_default=text("NOW()"),
+        default=lambda: datetime.now(timezone.utc),
         nullable=False,
     )
     

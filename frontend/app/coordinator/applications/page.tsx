@@ -10,7 +10,6 @@ import {
   CheckCircle,
   XCircle,
   MessageSquare,
-  MoreVertical,
   Building2,
   FileText,
   Calendar,
@@ -19,6 +18,7 @@ import {
 } from "lucide-react";
 import { getMyCalls } from "@/lib/coordinator";
 import { getCallApplications } from "@/lib/applications";
+import { UPLOADS_BASE_URL } from "@/lib/config";
 import { StatusBadge, SearchInput, FilterSelect, Pagination, TableSkeleton, EmptyState } from "@/components/coordinator/CoordinatorUI";
 import type { CoordinatorCall } from "@/types/coordinator";
 import type { Application } from "@/types/application";
@@ -52,9 +52,6 @@ export default function AllApplicationsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
-  // Action states
-  const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
-
   useEffect(() => {
     fetchAllApplications();
   }, []);
@@ -62,13 +59,6 @@ export default function AllApplicationsPage() {
   useEffect(() => {
     filterApplications();
   }, [applications, searchQuery, statusFilter]);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClick = () => setActiveDropdown(null);
-    document.addEventListener("click", handleClick);
-    return () => document.removeEventListener("click", handleClick);
-  }, []);
 
   async function fetchAllApplications() {
     setIsLoading(true);
@@ -296,10 +286,22 @@ export default function AllApplicationsPage() {
                         <StatusBadge status={app.status} />
                       </td>
                       <td className="p-4 text-center">
-                        <span className="inline-flex items-center gap-1 text-sm text-muted-foreground">
-                          <FileText className="w-4 h-4" />
-                          {app.documents?.length || 0}
-                        </span>
+                        <div className="inline-flex flex-col items-center gap-1 text-sm text-muted-foreground">
+                          <span className="inline-flex items-center gap-1">
+                            <FileText className="w-4 h-4" />
+                            {app.documents?.length || 0}
+                          </span>
+                          {app.documents?.[0]?.file_path && (
+                            <a
+                              href={`${UPLOADS_BASE_URL}/${app.documents[0].file_path}`}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="text-xs text-primary-600 dark:text-primary-400 hover:underline"
+                            >
+                              Voir document
+                            </a>
+                          )}
+                        </div>
                       </td>
                       <td className="p-4 text-sm text-muted-foreground">
                         {app.submitted_at
@@ -308,35 +310,37 @@ export default function AllApplicationsPage() {
                         }
                       </td>
                       <td className="p-4">
-                        <div className="flex justify-end relative">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveDropdown(activeDropdown === app.id ? null : app.id);
-                            }}
-                            className="p-2 hover:bg-muted rounded-lg transition-colors"
+                        <div className="flex justify-end items-center gap-1">
+                          <Link
+                            href={`/coordinator/applications/${app.id}`}
+                            title="Voir les détails"
+                            className="p-2 hover:bg-muted rounded-lg transition-colors text-muted-foreground hover:text-foreground"
                           >
-                            <MoreVertical className="w-4 h-4 text-muted-foreground" />
+                            <Eye className="w-4 h-4" />
+                          </Link>
+                          <Link
+                            href={`/coordinator/calls/${app.call_id}`}
+                            title="Voir l'appel"
+                            className="p-2 hover:bg-muted rounded-lg transition-colors text-muted-foreground hover:text-foreground"
+                          >
+                            <FileText className="w-4 h-4" />
+                          </Link>
+                          <button
+                            type="button"
+                            disabled
+                            title="Approuver (bientôt disponible)"
+                            className="p-2 rounded-lg text-green-500/50 cursor-not-allowed"
+                          >
+                            <CheckCircle className="w-4 h-4" />
                           </button>
-                          
-                          {activeDropdown === app.id && (
-                            <div className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-xl shadow-lg py-1 z-20">
-                              <Link
-                                href={`/coordinator/applications/${app.id}`}
-                                className="flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
-                              >
-                                <Eye className="w-4 h-4" />
-                                Voir détails
-                              </Link>
-                              <Link
-                                href={`/coordinator/calls/${app.call_id}`}
-                                className="flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
-                              >
-                                <FileText className="w-4 h-4" />
-                                Voir l'appel
-                              </Link>
-                            </div>
-                          )}
+                          <button
+                            type="button"
+                            disabled
+                            title="Rejeter (bientôt disponible)"
+                            className="p-2 rounded-lg text-red-500/50 cursor-not-allowed"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>

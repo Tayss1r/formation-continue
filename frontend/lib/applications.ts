@@ -7,6 +7,7 @@ import type {
   Application,
   ApplicationWithCall,
   ApplicationCreate,
+  ApplicationUpdate,
   ApplicationApprove,
   ApplicationReject,
   ApplicationRequestInfo,
@@ -55,6 +56,32 @@ export async function getMyApplication(
 ): Promise<ApplicationWithCall> {
   return apiClient.get<ApplicationWithCall>(
     `/applications/my-applications/${applicationId}`,
+    true
+  );
+}
+
+/**
+ * Delete an application for the current company (only if not approved)
+ */
+export async function deleteMyApplication(
+  applicationId: number
+): Promise<void> {
+  return apiClient.delete<void>(
+    `/applications/my-applications/${applicationId}`,
+    true
+  );
+}
+
+/**
+ * Update an existing application for the current company (if not approved/rejected)
+ */
+export async function updateMyApplication(
+  applicationId: number,
+  data: ApplicationUpdate
+): Promise<ApplicationActionResponse> {
+  return apiClient.put<ApplicationActionResponse>(
+    `/applications/my-applications/${applicationId}`,
+    data,
     true
   );
 }

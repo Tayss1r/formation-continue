@@ -11,8 +11,6 @@ import {
   Eye,
   CheckCircle,
   XCircle,
-  RefreshCw,
-  MessageSquare,
   Calendar,
   AlertCircle,
   ExternalLink,
@@ -20,7 +18,7 @@ import {
   Phone,
   MapPin,
 } from "lucide-react";
-import { getApplicationDetails, approveApplication, rejectApplication, requestAdditionalInfo, reviewApplicationDocument } from "@/lib/applications";
+import { getApplicationDetails, approveApplication, rejectApplication } from "@/lib/applications";
 import { StatusBadge, ConfirmDialog } from "@/components/coordinator/CoordinatorUI";
 import type { ApplicationWithCall, ApplicationDocument } from "@/types/application";
 import { UPLOADS_BASE_URL } from "@/lib/config";
@@ -38,14 +36,8 @@ export default function ApplicationDetailPage() {
   
   // Action dialogs
   const [actionDialog, setActionDialog] = useState<{
-    type: 'approve' | 'reject' | 'request_info';
+    type: 'approve' | 'reject';
     notes: string;
-  } | null>(null);
-  
-  const [documentDialog, setDocumentDialog] = useState<{
-    document: ApplicationDocument;
-    action: 'approve' | 'reject' | 'revision';
-    reason: string;
   } | null>(null);
 
   useEffect(() => {
@@ -71,6 +63,8 @@ export default function ApplicationDetailPage() {
   // Application actions
   async function handleApprove() {
     if (!actionDialog) return;
+    const confirmed = window.confirm("Êtes-vous sûr de vouloir approuver cette candidature ?");
+    if (!confirmed) return;
     
     setIsActionLoading(true);
     try {
@@ -90,6 +84,8 @@ export default function ApplicationDetailPage() {
 
   async function handleReject() {
     if (!actionDialog) return;
+    const confirmed = window.confirm("Êtes-vous sûr de vouloir rejeter cette candidature ?");
+    if (!confirmed) return;
     
     setIsActionLoading(true);
     try {
@@ -107,53 +103,31 @@ export default function ApplicationDetailPage() {
     }
   }
 
-  async function handleRequestInfo() {
-    if (!actionDialog) return;
-    
-    setIsActionLoading(true);
-    try {
-      await requestAdditionalInfo(applicationId, {
-        message: actionDialog.notes,
-      });
-      fetchApplication();
-      setActionDialog(null);
-    } catch (err) {
-      console.error("Error requesting info:", err);
-      setError("Erreur lors de la demande d'informations");
-    } finally {
-      setIsActionLoading(false);
-    }
-  }
-
-  // Document actions
-  async function handleDocumentReview() {
-    if (!documentDialog || !application) return;
-    
-    setIsActionLoading(true);
-    try {
-      const statusMap = {
-        approve: 'approved' as const,
-        reject: 'rejected' as const,
-        revision: 'requires_resubmission' as const,
-      };
-      
-      await reviewApplicationDocument(applicationId, documentDialog.document.id, {
-        status: statusMap[documentDialog.action],
-        rejection_reason: documentDialog.action !== 'approve' ? documentDialog.reason : undefined,
-      });
-      fetchApplication();
-      setDocumentDialog(null);
-    } catch (err) {
-      console.error("Error reviewing document:", err);
-      setError("Erreur lors de l'examen du document");
-    } finally {
-      setIsActionLoading(false);
-    }
-  }
-
   // Download document
   function getDocumentUrl(doc: ApplicationDocument) {
     return `${UPLOADS_BASE_URL}/${doc.file_path}`;
+  }
+
+  async function handleDownloadDocument(doc: ApplicationDocument) {
+    try {
+      const response = await fetch(getDocumentUrl(doc));
+      if (!response.ok) {
+        throw new Error(`HTTP ${response.status}`);
+      }
+
+      const blob = await response.blob();
+      const blobUrl = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = blobUrl;
+      link.download = doc.original_filename || "document";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(blobUrl);
+    } catch (err) {
+      console.error("Download failed:", err);
+      setError("Impossible de télécharger ce document");
+    }
   }
 
   // Loading state
@@ -240,13 +214,6 @@ export default function ApplicationDetailPage() {
         {/* Action Buttons */}
         {canTakeAction && (
           <div className="flex flex-wrap gap-2">
-            <button
-              onClick={() => setActionDialog({ type: 'request_info', notes: '' })}
-              className="px-4 py-2 rounded-lg font-medium text-orange-600 bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:hover:bg-orange-900/30 transition-colors inline-flex items-center gap-2"
-            >
-              <MessageSquare className="w-4 h-4" />
-              Demander infos
-            </button>
             <button
               onClick={() => setActionDialog({ type: 'reject', notes: '' })}
               className="px-4 py-2 rounded-lg font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 transition-colors inline-flex items-center gap-2"
@@ -356,40 +323,14 @@ export default function ApplicationDetailPage() {
                       >
                         <Eye className="w-4 h-4 text-muted-foreground" />
                       </a>
-                      <a
-                        href={getDocumentUrl(doc)}
-                        download
+                      <button
+                        onClick={() => handleDownloadDocument(doc)}
                         className="p-2 hover:bg-muted rounded-lg transition-colors"
                         title="Télécharger"
+                        type="button"
                       >
                         <Download className="w-4 h-4 text-muted-foreground" />
-                      </a>
-                      
-                      {canTakeAction && doc.review_status === 'pending' && (
-                        <div className="flex items-center gap-1 ml-2 pl-2 border-l border-border">
-                          <button
-                            onClick={() => setDocumentDialog({ document: doc, action: 'approve', reason: '' })}
-                            className="p-2 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
-                            title="Approuver"
-                          >
-                            <CheckCircle className="w-4 h-4 text-green-500" />
-                          </button>
-                          <button
-                            onClick={() => setDocumentDialog({ document: doc, action: 'reject', reason: '' })}
-                            className="p-2 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                            title="Rejeter"
-                          >
-                            <XCircle className="w-4 h-4 text-red-500" />
-                          </button>
-                          <button
-                            onClick={() => setDocumentDialog({ document: doc, action: 'revision', reason: '' })}
-                            className="p-2 hover:bg-orange-50 dark:hover:bg-orange-900/20 rounded-lg transition-colors"
-                            title="Demander révision"
-                          >
-                            <RefreshCw className="w-4 h-4 text-orange-500" />
-                          </button>
-                        </div>
-                      )}
+                      </button>
                     </div>
                   </div>
                 ))}
@@ -542,26 +483,20 @@ export default function ApplicationDetailPage() {
             <h3 className="text-lg font-semibold text-foreground mb-2">
               {actionDialog.type === 'approve' && 'Approuver la candidature'}
               {actionDialog.type === 'reject' && 'Rejeter la candidature'}
-              {actionDialog.type === 'request_info' && 'Demander des informations'}
             </h3>
             <p className="text-sm text-muted-foreground mb-4">
               {actionDialog.type === 'approve' && 'L\'entreprise sera notifiée de l\'approbation et pourra inscrire ses employés.'}
               {actionDialog.type === 'reject' && 'L\'entreprise sera notifiée du rejet de sa candidature.'}
-              {actionDialog.type === 'request_info' && 'Un message sera envoyé à l\'entreprise pour demander des informations.'}
             </p>
             
             <div className="mb-6">
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                {actionDialog.type === 'request_info' ? 'Message *' : 'Notes (optionnel)'}
+                Notes (optionnel)
               </label>
               <textarea
                 value={actionDialog.notes}
                 onChange={(e) => setActionDialog({ ...actionDialog, notes: e.target.value })}
-                placeholder={
-                  actionDialog.type === 'request_info'
-                    ? 'Décrivez les informations supplémentaires requises...'
-                    : 'Ajouter des notes pour cette décision...'
-                }
+                placeholder="Ajouter des notes pour cette décision..."
                 rows={4}
                 className="form-input form-textarea w-full"
               />
@@ -579,15 +514,12 @@ export default function ApplicationDetailPage() {
                 onClick={() => {
                   if (actionDialog.type === 'approve') handleApprove();
                   else if (actionDialog.type === 'reject') handleReject();
-                  else handleRequestInfo();
                 }}
-                disabled={isActionLoading || (actionDialog.type === 'request_info' && !actionDialog.notes.trim())}
+                disabled={isActionLoading}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2 ${
                   actionDialog.type === 'approve'
                     ? 'bg-green-600 hover:bg-green-700 text-white'
-                    : actionDialog.type === 'reject'
-                    ? 'bg-red-600 hover:bg-red-700 text-white'
-                    : 'bg-orange-600 hover:bg-orange-700 text-white'
+                    : 'bg-red-600 hover:bg-red-700 text-white'
                 }`}
               >
                 {isActionLoading && (
@@ -595,68 +527,6 @@ export default function ApplicationDetailPage() {
                 )}
                 {actionDialog.type === 'approve' && 'Approuver'}
                 {actionDialog.type === 'reject' && 'Rejeter'}
-                {actionDialog.type === 'request_info' && 'Envoyer'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Document Review Dialog */}
-      {documentDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => !isActionLoading && setDocumentDialog(null)}
-          />
-          <div className="relative bg-card rounded-2xl shadow-elevated border border-border max-w-md w-full p-6 animate-fade-up">
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-              {documentDialog.action === 'approve' && 'Approuver le document'}
-              {documentDialog.action === 'reject' && 'Rejeter le document'}
-              {documentDialog.action === 'revision' && 'Demander une révision'}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              Document: {documentDialog.document.original_filename}
-            </p>
-            
-            {documentDialog.action !== 'approve' && (
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-foreground mb-1.5">
-                  Raison *
-                </label>
-                <textarea
-                  value={documentDialog.reason}
-                  onChange={(e) => setDocumentDialog({ ...documentDialog, reason: e.target.value })}
-                  placeholder="Expliquez la raison du rejet ou de la révision..."
-                  rows={3}
-                  className="form-input form-textarea w-full"
-                />
-              </div>
-            )}
-            
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setDocumentDialog(null)}
-                disabled={isActionLoading}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={handleDocumentReview}
-                disabled={isActionLoading || (documentDialog.action !== 'approve' && !documentDialog.reason.trim())}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2 ${
-                  documentDialog.action === 'approve'
-                    ? 'bg-green-600 hover:bg-green-700 text-white'
-                    : documentDialog.action === 'reject'
-                    ? 'bg-red-600 hover:bg-red-700 text-white'
-                    : 'bg-orange-600 hover:bg-orange-700 text-white'
-                }`}
-              >
-                {isActionLoading && (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                )}
-                Confirmer
               </button>
             </div>
           </div>

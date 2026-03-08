@@ -44,18 +44,29 @@ class ApplicationService:
     async def get_application_by_id(
         application_id: int,
         session: AsyncSession,
-        include_relations: bool = True
+        include_relations: bool = True,
+        include_documents: bool = False,
+        include_call: bool = False,
+        include_company: bool = False,
+        include_coordinator: bool = False,
     ) -> Optional[CompanyApplication]:
         """Get application by ID with optional relations"""
         query = select(CompanyApplication).where(CompanyApplication.id == application_id)
-        
-        if include_relations:
-            query = query.options(
-                selectinload(CompanyApplication.call),
-                selectinload(CompanyApplication.company).selectinload(Company.user),
-                selectinload(CompanyApplication.coordinator),
-                selectinload(CompanyApplication.documents),
-            )
+
+        load_all = include_relations
+
+        options = []
+        if load_all or include_call:
+            options.append(selectinload(CompanyApplication.call))
+        if load_all or include_company:
+            options.append(selectinload(CompanyApplication.company).selectinload(Company.user))
+        if load_all or include_coordinator:
+            options.append(selectinload(CompanyApplication.coordinator))
+        if load_all or include_documents:
+            options.append(selectinload(CompanyApplication.documents))
+
+        if options:
+            query = query.options(*options)
         
         result = await session.execute(query)
         return result.scalar_one_or_none()
@@ -135,16 +146,13 @@ class ApplicationService:
         update_data: ApplicationUpdate,
         session: AsyncSession
     ) -> CompanyApplication:
-        """Update an application (only in SUBMITTED or DOCUMENTS_PENDING or ADDITIONAL_INFO_REQUIRED status)"""
-        editable_statuses = [
-            ApplicationStatus.SUBMITTED,
-            ApplicationStatus.DOCUMENTS_PENDING,
-            ApplicationStatus.ADDITIONAL_INFO_REQUIRED,
-        ]
-        
-        if application.status not in editable_statuses:
+        """Update an application (allowed until final decision)"""
+        if application.status in [
+            ApplicationStatus.APPROVED,
+            ApplicationStatus.REJECTED,
+        ]:
             raise InvalidApplicationStatus(
-                "Can only update applications in SUBMITTED, DOCUMENTS_PENDING, or ADDITIONAL_INFO_REQUIRED status"
+                "Cannot update applications that are approved or rejected"
             )
         
         update_dict = update_data.model_dump(exclude_unset=True)
@@ -414,6 +422,20 @@ class ApplicationService:
         
         result = await session.execute(query)
         return list(result.scalars().all())
+
+    @staticmethod
+    async def delete_company_application(
+        application: CompanyApplication,
+        session: AsyncSession
+    ) -> None:
+        """Delete a company application if it has not been approved yet"""
+        if application.status == ApplicationStatus.APPROVED:
+            raise InvalidApplicationStatus(
+                "Cannot delete an approved application"
+            )
+
+        await session.delete(application)
+        await session.commit()
     
     @staticmethod
     async def get_call_applications(

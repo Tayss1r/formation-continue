@@ -78,6 +78,7 @@ class DocumentOut(BaseModel):
     id: int
     document_type: str
     document_label: str
+    file_path: str
     original_filename: str
     file_size: int
     mime_type: str

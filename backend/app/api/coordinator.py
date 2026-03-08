@@ -11,7 +11,8 @@ from sqlalchemy import select, func, cast, Integer
 from ..db.database import get_session
 from ..db.models import (
     User, UserRole, CallStatus, ApplicationStatus, EmployeeSubmissionStatus,
-    CallForApplicants, CompanyApplication, EmployeeSubmission, AuditLog
+    CallForApplicants, CompanyApplication, EmployeeSubmission, AuditLog,
+    Company, EmployeeProfile
 )
 from ..dependencies import RoleChecker
 from ..schemas.coordinator_schema import (
@@ -270,7 +271,51 @@ async def get_recent_activity(
     
     result = await session.execute(query)
     logs = result.mappings().all()
-    
+
+    # --- Batched name lookups ---
+    call_ids = [l['entity_id'] for l in logs if l['entity_type'] == 'CallForApplicants']
+    app_ids  = [l['entity_id'] for l in logs if l['entity_type'] == 'CompanyApplication']
+    sub_ids  = [l['entity_id'] for l in logs if l['entity_type'] == 'EmployeeSubmission']
+    actor_ids = list({l['user_id'] for l in logs if l['user_id']})
+
+    entity_names: dict = {}
+
+    if call_ids:
+        rows = (await session.execute(
+            select(CallForApplicants.id, CallForApplicants.title)
+            .where(CallForApplicants.id.in_(call_ids))
+        )).all()
+        for r in rows:
+            entity_names[('CallForApplicants', r.id)] = r.title
+
+    if app_ids:
+        rows = (await session.execute(
+            select(CompanyApplication.id, Company.name)
+            .join(Company, CompanyApplication.company_id == Company.id)
+            .where(CompanyApplication.id.in_(app_ids))
+        )).all()
+        for r in rows:
+            entity_names[('CompanyApplication', r.id)] = r.name
+
+    if sub_ids:
+        rows = (await session.execute(
+            select(EmployeeSubmission.id, User.fullname)
+            .join(EmployeeProfile, EmployeeSubmission.employee_id == EmployeeProfile.id)
+            .join(User, EmployeeProfile.user_id == User.id)
+            .where(EmployeeSubmission.id.in_(sub_ids))
+        )).all()
+        for r in rows:
+            entity_names[('EmployeeSubmission', r.id)] = r.fullname
+
+    user_names: dict = {}
+    if actor_ids:
+        rows = (await session.execute(
+            select(User.id, User.fullname).where(User.id.in_(actor_ids))
+        )).all()
+        for r in rows:
+            user_names[r.id] = r.fullname
+    # --- End batched lookups ---
+
     activities = []
     for log in logs:
         activities.append({
@@ -278,6 +323,8 @@ async def get_recent_activity(
             'action': log['action'],
             'entity_type': log['entity_type'],
             'entity_id': log['entity_id'],
+            'entity_name': entity_names.get((log['entity_type'], log['entity_id'])),
+            'user_name': user_names.get(log['user_id']) if log['user_id'] else None,
             'old_status': None,
             'new_status': None,
             'notes': log['notes'],

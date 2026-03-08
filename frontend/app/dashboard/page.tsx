@@ -10,9 +10,10 @@ import {
   AlertCircle,
   ArrowRight,
   Send,
+  Trash2,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getMyApplications } from "@/lib/applications";
+import { deleteMyApplication, getMyApplications } from "@/lib/applications";
 import { getActiveCalls } from "@/lib/calls";
 import type { Application } from "@/types/application";
 import type { CallPublic } from "@/types/call";
@@ -24,6 +25,7 @@ export default function CompanyDashboardPage() {
   const [activeCalls, setActiveCalls] = useState<CallPublic[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
 
   useEffect(() => {
     if (isAuthLoading) return;
@@ -75,6 +77,23 @@ export default function CompanyDashboardPage() {
       color: "from-blue-500 to-cyan-500",
     },
   ];
+
+  async function handleDeleteApplication(applicationId: number) {
+    const confirmed = window.confirm("Supprimer cette candidature ?");
+    if (!confirmed) return;
+
+    setDeletingId(applicationId);
+    setError(null);
+    try {
+      await deleteMyApplication(applicationId);
+      setApplications((prev) => prev.filter((app) => app.id !== applicationId));
+    } catch (err) {
+      console.error("Error deleting application:", err);
+      setError("Impossible de supprimer cette candidature");
+    } finally {
+      setDeletingId(null);
+    }
+  }
 
   return (
     <>
@@ -185,21 +204,40 @@ export default function CompanyDashboardPage() {
                       key={app.id}
                       className="flex items-center justify-between p-4 rounded-xl border border-border hover:bg-muted/50 transition-colors"
                     >
-                      <div className="flex-1 min-w-0">
+                      <div className="flex-1 min-w-0 space-y-1">
                         <p className="font-medium text-foreground truncate">
-                          Candidature #{app.id}
+                          {app.call?.title || `Candidature #${app.id}`}
                         </p>
-                        <p className="text-sm text-muted-foreground">
-                          Appel #{app.call_id}
+                        <p className="text-xs text-muted-foreground">
+                          {app.call?.reference_number
+                            ? `Référence: ${app.call.reference_number}`
+                            : `Appel #${app.call_id}`}
+                        </p>
+                        <p className="text-xs text-muted-foreground">
+                          {app.submitted_at
+                            ? `Soumise le ${new Date(app.submitted_at).toLocaleDateString("fr-FR")}`
+                            : "Date de soumission indisponible"}
                         </p>
                       </div>
-                      <span
-                        className={`px-3 py-1 rounded-full text-xs font-medium ${
-                          APPLICATION_STATUS_COLORS[app.status] || "bg-gray-100 text-gray-700"
-                        }`}
-                      >
-                        {APPLICATION_STATUS_LABELS[app.status] || app.status}
-                      </span>
+                      <div className="flex items-center gap-2 ml-3">
+                        <span
+                          className={`px-3 py-1 rounded-full text-xs font-medium ${
+                            APPLICATION_STATUS_COLORS[app.status] || "bg-gray-100 text-gray-700"
+                          }`}
+                        >
+                          {APPLICATION_STATUS_LABELS[app.status] || app.status}
+                        </span>
+                        {app.status !== "approved" && (
+                          <button
+                            onClick={() => handleDeleteApplication(app.id)}
+                            disabled={deletingId === app.id}
+                            className="p-2 rounded-lg text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors disabled:opacity-50"
+                            title="Supprimer la candidature"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
