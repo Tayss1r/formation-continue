@@ -19,6 +19,7 @@ import {
   Clock,
   Send,
   AlertCircle,
+  Loader2,
 } from "lucide-react";
 import { getMyCalls } from "@/lib/coordinator";
 import { deleteCall, publishCall, closeCall, startCallReview, publishCallResults } from "@/lib/calls";
@@ -56,6 +57,8 @@ export default function CallsManagementPage() {
     title: string;
     message: string;
     variant: 'danger' | 'primary' | 'warning';
+    callId: number;
+    actionType: 'delete' | 'publish' | 'close' | 'start_review' | 'publish_results';
     action: () => Promise<void>;
   } | null>(null);
   const [isActionLoading, setIsActionLoading] = useState(false);
@@ -117,6 +120,8 @@ export default function CallsManagementPage() {
       title: "Supprimer l'appel",
       message: "Êtes-vous sûr de vouloir supprimer cet appel ? Cette action est irréversible.",
       variant: 'danger',
+      callId,
+      actionType: 'delete',
       action: async () => {
         await deleteCall(callId);
         setCalls(calls.filter((c) => c.id !== callId));
@@ -130,9 +135,11 @@ export default function CallsManagementPage() {
       title: "Publier l'appel",
       message: "L'appel sera visible publiquement et les entreprises pourront soumettre leurs candidatures.",
       variant: 'primary',
+      callId,
+      actionType: 'publish',
       action: async () => {
         await publishCall(callId);
-        fetchCalls();
+        await fetchCalls();
       },
     });
   }
@@ -143,9 +150,11 @@ export default function CallsManagementPage() {
       title: "Fermer les candidatures",
       message: "Les entreprises ne pourront plus soumettre de candidatures pour cet appel.",
       variant: 'warning',
+      callId,
+      actionType: 'close',
       action: async () => {
         await closeCall(callId);
-        fetchCalls();
+        await fetchCalls();
       },
     });
   }
@@ -156,9 +165,11 @@ export default function CallsManagementPage() {
       title: "Publier les résultats",
       message: "Les résultats seront publiés et visibles sur la page d'accueil.",
       variant: 'primary',
+      callId,
+      actionType: 'publish_results',
       action: async () => {
         await publishCallResults(callId);
-        fetchCalls();
+        await fetchCalls();
       },
     });
   }
@@ -169,9 +180,11 @@ export default function CallsManagementPage() {
       title: "Démarrer l'examen",
       message: "L'appel passera en mode examen. Vous pourrez ensuite examiner les candidatures et publier les résultats.",
       variant: 'primary',
+      callId,
+      actionType: 'start_review',
       action: async () => {
         await startCallReview(callId);
-        fetchCalls();
+        await fetchCalls();
       },
     });
   }
@@ -193,6 +206,8 @@ export default function CallsManagementPage() {
 
   // Render inline action buttons based on call status
   function renderActions(call: CoordinatorCall) {
+    const isMutatingThisCall = isActionLoading && confirmDialog?.callId === call.id;
+
     return (
       <div className="flex items-center justify-end gap-1">
         <Link
@@ -215,16 +230,26 @@ export default function CallsManagementPage() {
             <button
               title="Publier"
               onClick={() => handlePublish(call.id)}
+              disabled={isActionLoading}
               className="p-1.5 rounded-lg text-muted-foreground hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
             >
-              <Send className="w-4 h-4" />
+              {isMutatingThisCall && confirmDialog?.actionType === 'publish' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Send className="w-4 h-4" />
+              )}
             </button>
             <button
               title="Supprimer"
               onClick={() => handleDelete(call.id)}
+              disabled={isActionLoading}
               className="p-1.5 rounded-lg text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
             >
-              <Trash2 className="w-4 h-4" />
+              {isMutatingThisCall && confirmDialog?.actionType === 'delete' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Trash2 className="w-4 h-4" />
+              )}
             </button>
           </>
         )}
@@ -241,9 +266,14 @@ export default function CallsManagementPage() {
             <button
               title="Fermer les candidatures"
               onClick={() => handleClose(call.id)}
+              disabled={isActionLoading}
               className="p-1.5 rounded-lg text-muted-foreground hover:text-orange-600 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
             >
-              <XCircle className="w-4 h-4" />
+              {isMutatingThisCall && confirmDialog?.actionType === 'close' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <XCircle className="w-4 h-4" />
+              )}
             </button>
           </>
         )}
@@ -257,13 +287,6 @@ export default function CallsManagementPage() {
             >
               <Users className="w-4 h-4" />
             </Link>
-            <button
-              title="Démarrer l'examen"
-              onClick={() => handleStartReview(call.id)}
-              className="p-1.5 rounded-lg text-muted-foreground hover:text-purple-600 hover:bg-purple-50 dark:hover:bg-purple-900/20 transition-colors"
-            >
-              <FileText className="w-4 h-4" />
-            </button>
           </>
         )}
 
@@ -279,9 +302,14 @@ export default function CallsManagementPage() {
             <button
               title="Publier les résultats"
               onClick={() => handlePublishResults(call.id)}
+              disabled={isActionLoading}
               className="p-1.5 rounded-lg text-muted-foreground hover:text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 transition-colors"
             >
-              <CheckCircle className="w-4 h-4" />
+              {isMutatingThisCall && confirmDialog?.actionType === 'publish_results' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle className="w-4 h-4" />
+              )}
             </button>
           </>
         )}

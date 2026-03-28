@@ -11,7 +11,7 @@ export interface ApplicationDocument {
   file_path: string;
   original_filename: string;
   review_status: DocumentReviewStatus;
-  rejection_reason?: string;
+  review_notes?: string;
   uploaded_at: string;
   reviewed_at?: string;
 }
@@ -69,13 +69,12 @@ export interface ApplicationUpdate {
 
 // Action interfaces
 export interface ApplicationApprove {
-  decision: string;
-  notes?: string;
+  decision_notes?: string;
 }
 
 export interface ApplicationReject {
-  decision: string;
-  notes?: string;
+  rejection_reason: string;
+  decision_notes?: string;
 }
 
 export interface ApplicationRequestInfo {
@@ -83,8 +82,8 @@ export interface ApplicationRequestInfo {
 }
 
 export interface DocumentReview {
-  status: 'approved' | 'rejected' | 'requires_resubmission';
-  rejection_reason?: string;
+  review_status: 'approved' | 'rejected' | 'revision_required';
+  review_notes?: string;
 }
 
 // Response interfaces
@@ -101,6 +100,26 @@ export interface ApplicationActionResponse {
 export interface DocumentActionResponse {
   message: string;
   document: ApplicationDocument;
+}
+
+export interface CompanyAttendanceEmployee {
+  employee_id: number;
+  employee_name: string;
+  employee_email: string;
+  company_name: string;
+  present_count: number;
+  late_count: number;
+  absent_count: number;
+  total_sessions_marked: number;
+  presence_percentage: number;
+  course_titles: string[];
+  cohort_titles: string[];
+  session_titles: string[];
+}
+
+export interface CompanyAttendanceSummaryResponse {
+  attendance: CompanyAttendanceEmployee[];
+  total: number;
 }
 
 // Status display helpers
@@ -128,12 +147,12 @@ export const DOCUMENT_STATUS_LABELS: Record<DocumentReviewStatus, string> = {
   pending: 'En attente',
   approved: 'Approuvé',
   rejected: 'Rejeté',
-  requires_resubmission: 'À resoumettre',
+  revision_required: 'Révision demandée',
 };
 
 export const DOCUMENT_STATUS_COLORS: Record<DocumentReviewStatus, string> = {
   pending: 'gray',
   approved: 'green',
   rejected: 'red',
-  requires_resubmission: 'orange',
+  revision_required: 'orange',
 };

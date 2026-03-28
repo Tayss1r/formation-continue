@@ -12,7 +12,6 @@ import {
   HardHat,
   TrendingUp,
   BookOpen,
-  Users,
   GraduationCap,
   MapPin,
   Clock,
@@ -463,10 +462,6 @@ export default function DepartmentPage() {
                               {course.duration_hours}h
                             </span>
                           )}
-                          <span className="flex items-center gap-1">
-                            <Users className="w-4 h-4" />
-                            {course.max_seats} places
-                          </span>
                         </div>
                       </div>
                     </div>

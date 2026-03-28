@@ -315,7 +315,7 @@ async def get_call(
     # Check ownership (unless admin)
     if current_user.role != UserRole.ADMIN and call.created_by_id != current_user.id:
         raise InsufficientPermission()
-    
+
     app_count = await CallService.get_application_count(call_id, session)
     
     return build_call_out(call, application_count=app_count)
@@ -339,6 +339,12 @@ async def update_call(
     
     if current_user.role != UserRole.ADMIN and call.created_by_id != current_user.id:
         raise InsufficientPermission()
+
+    if call.status == CallStatus.CLOSED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cet appel est déjà fermé",
+        )
     
     call = await CallService.update_call(call, update_data, session)
     
@@ -365,6 +371,12 @@ async def delete_call(
     
     if current_user.role != UserRole.ADMIN and call.created_by_id != current_user.id:
         raise InsufficientPermission()
+
+    if call.status in [CallStatus.UNDER_REVIEW, CallStatus.RESULTS_PUBLISHED]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="L'examen est déjà démarré pour cet appel",
+        )
     
     await CallService.delete_call(call, session)
     
@@ -388,6 +400,12 @@ async def publish_call(
     
     if current_user.role != UserRole.ADMIN and call.created_by_id != current_user.id:
         raise InsufficientPermission()
+
+    if call.status == CallStatus.RESULTS_PUBLISHED:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Les résultats sont déjà publiés pour cet appel",
+        )
     
     old_status = call.status.value if hasattr(call.status, 'value') else call.status
     call = await CallService.publish_call(call, session)

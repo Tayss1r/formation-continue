@@ -8,7 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
-from ..db.models import Course, User, CourseType, Professor, Department
+from ..db.models import Course, User, UserRole, CourseType, Professor, Department
 from ..schemas.course_schema import CourseCreate, CourseUpdate
 from ..core.config import settings
 
@@ -31,12 +31,10 @@ class CourseService:
         
         Returns a list of dicts with professor info + user details + relevance score.
         """
-        from ..db.models import User as UserModel
-        
         query = select(Professor).options(
             selectinload(Professor.user),
             selectinload(Professor.courses)
-        )
+        ).join(User, Professor.user_id == User.id).where(User.role == UserRole.PROFESSOR)
         
         result = await session.execute(query)
         professors = result.scalars().all()
@@ -383,17 +381,17 @@ class CourseService:
         Check if a course has any applications through its calls for applicants.
         Returns True if any approved or pending application exists.
         """
-        from ..db.models import CallForApplicants, CompanyApplication, ApplicationStatus
+        from ..db.models import Cohort, CompanyApplication, ApplicationStatus
         from sqlalchemy import exists, and_
         
         # Check if any application exists for any call of this course
         # that is not rejected
         subquery = (
             select(CompanyApplication.id)
-            .join(CallForApplicants, CompanyApplication.call_id == CallForApplicants.id)
+            .join(Cohort, Cohort.call_id == CompanyApplication.call_id)
             .where(
                 and_(
-                    CallForApplicants.course_id == course_id,
+                    Cohort.course_id == course_id,
                     CompanyApplication.status != ApplicationStatus.REJECTED
                 )
             )
@@ -410,10 +408,11 @@ class CourseService:
         Returns info about editability and reason if not editable.
         """
         has_applications = await CourseService.course_has_applications(course_id, session)
+        has_bookings = has_applications
         
         return {
-            "can_edit_price": not has_applications,
-            "can_edit_seats": not has_applications,
-            "has_applications": has_applications,
-            "reason": "Impossible de modifier après des candidatures" if has_applications else None
+            "can_edit_price": not has_bookings,
+            "can_edit_seats": not has_bookings,
+            "has_bookings": has_bookings,
+            "reason": "Impossible de modifier après des candidatures" if has_bookings else None
         }

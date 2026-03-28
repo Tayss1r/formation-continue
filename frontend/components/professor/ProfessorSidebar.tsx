@@ -2,19 +2,17 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { usePathname, useRouter } from "next/navigation";
+import { usePathname } from "next/navigation";
 import {
   LayoutDashboard,
   BookOpen,
   Menu,
   X,
-  GraduationCap,
-  ChevronLeft,
   Settings,
-  LogOut,
+  CalendarDays,
   ClipboardCheck,
 } from "lucide-react";
-import { useAuth } from "@/contexts/AuthContext";
+import { AppLogo } from "@/components/ui/AppLogo";
 
 const navItems = [
   {
@@ -28,8 +26,13 @@ const navItems = [
     icon: BookOpen,
   },
   {
-    label: "Gestion Présences",
+    label: "Sessions",
     href: "/professor/sessions",
+    icon: CalendarDays,
+  },
+  {
+    label: "Presences",
+    href: "/professor/attendance",
     icon: ClipboardCheck,
   },
   {
@@ -42,13 +45,6 @@ const navItems = [
 export function ProfessorSidebar() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const pathname = usePathname();
-  const router = useRouter();
-  const { logout } = useAuth();
-
-  const handleLogout = async () => {
-    await logout();
-    router.push("/");
-  };
 
   return (
     <>
@@ -56,11 +52,9 @@ export function ProfessorSidebar() {
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card px-4 py-3">
         <div className="flex items-center justify-between">
           <Link href="/professor" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-              <GraduationCap className="w-5 h-5 text-white" />
-            </div>
+            <AppLogo size="sm" alt="Forminy logo" />
             <span className="text-lg font-bold text-foreground">
-              Espace Professeur
+              Forminy
             </span>
           </Link>
           <button
@@ -94,28 +88,15 @@ export function ProfessorSidebar() {
           {/* Logo */}
           <div className="p-6">
             <Link href="/professor" className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-primary">
-                <GraduationCap className="w-6 h-6 text-white" />
-              </div>
+              <AppLogo alt="Forminy logo" />
               <div>
                 <span className="text-lg font-bold text-foreground block">
-                  Formation
+                  Forminy
                 </span>
                 <span className="text-xs text-muted-foreground">
                   Espace Professeur
                 </span>
               </div>
-            </Link>
-          </div>
-
-          {/* Back to Site */}
-          <div className="px-4 py-3">
-            <Link
-              href="/"
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Retour au site
             </Link>
           </div>
 
@@ -141,17 +122,6 @@ export function ProfessorSidebar() {
               );
             })}
           </nav>
-
-          {/* Logout */}
-          <div className="p-4">
-            <button
-              onClick={handleLogout}
-              className="flex items-center gap-3 w-full px-4 py-3 rounded-xl text-muted-foreground hover:bg-red-50 dark:hover:bg-red-500/10 hover:text-red-600 dark:hover:text-red-400 transition-colors"
-            >
-              <LogOut className="w-5 h-5" />
-              <span className="font-medium">Déconnexion</span>
-            </button>
-          </div>
         </div>
       </aside>
     </>

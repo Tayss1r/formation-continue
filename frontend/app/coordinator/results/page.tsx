@@ -9,14 +9,14 @@ import {
   Send,
   AlertCircle,
   Building2,
-  FileText,
-  Calendar,
   Users,
   ArrowRight,
+  Download,
+  Loader2,
 } from "lucide-react";
 import { getMyCalls } from "@/lib/coordinator";
-import { getCallApplications, getApplicationDetails } from "@/lib/applications";
-import { publishCallResults } from "@/lib/calls";
+import { getCallApplications } from "@/lib/applications";
+import { downloadResultsFile, publishResultsAsNews } from "@/lib/invitations";
 import { StatusBadge, EmptyState, ConfirmDialog, CardSkeleton } from "@/components/coordinator/CoordinatorUI";
 import type { CoordinatorCall } from "@/types/coordinator";
 import type { Application } from "@/types/application";
@@ -35,10 +35,27 @@ export default function ResultsPublicationPage() {
   const [selectedCall, setSelectedCall] = useState<CoordinatorCall | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [confirmPublish, setConfirmPublish] = useState(false);
+  const [downloadingCallId, setDownloadingCallId] = useState<number | null>(null);
+  const [generatedCalls, setGeneratedCalls] = useState<Record<number, boolean>>({});
 
   useEffect(() => {
     fetchData();
   }, []);
+
+  function getErrorMessage(err: unknown, fallback: string): string {
+    if (err instanceof Error && err.message) return err.message;
+    if (typeof err === "object" && err !== null) {
+      const message = (err as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim().length > 0) {
+        return message;
+      }
+      const detail = (err as { detail?: unknown }).detail;
+      if (typeof detail === "string" && detail.trim().length > 0) {
+        return detail;
+      }
+    }
+    return fallback;
+  }
 
   async function fetchData() {
     setIsLoading(true);
@@ -48,7 +65,7 @@ export default function ResultsPublicationPage() {
       
       // Filter calls that can have results published
       const eligibleCalls = callsRes.calls.filter(
-        (c) => c.status === 'closed' || c.status === 'under_review' || c.status === 'results_published'
+        (c) => c.status === 'published' || c.status === 'under_review' || c.status === 'results_published'
       );
 
       // Get approved applications for each call in parallel
@@ -65,6 +82,12 @@ export default function ResultsPublicationPage() {
       );
 
       setCallsData(callsWithApproved);
+      setGeneratedCalls(
+        callsWithApproved.reduce<Record<number, boolean>>((acc, item) => {
+          acc[item.call.id] = item.call.status === "results_published";
+          return acc;
+        }, {})
+      );
     } catch (err) {
       console.error("Error fetching data:", err);
       setError("Erreur lors du chargement des données");
@@ -78,16 +101,29 @@ export default function ResultsPublicationPage() {
     
     setIsPublishing(true);
     try {
-      await publishCallResults(selectedCall.id);
-      fetchData();
+      await publishResultsAsNews(selectedCall.id);
+      await fetchData();
       setConfirmPublish(false);
       setSelectedCall(null);
       setShowPreview(false);
     } catch (err) {
       console.error("Error publishing results:", err);
-      setError("Erreur lors de la publication des résultats");
+      setError(getErrorMessage(err, "Erreur lors de la publication des résultats"));
     } finally {
       setIsPublishing(false);
+    }
+  }
+
+  async function handleDownloadResults(callId: number) {
+    setDownloadingCallId(callId);
+    try {
+      await downloadResultsFile(callId, "pdf");
+      setGeneratedCalls((prev) => ({ ...prev, [callId]: true }));
+    } catch (err) {
+      console.error("Error downloading results:", err);
+      setError(getErrorMessage(err, "Erreur lors du téléchargement du fichier"));
+    } finally {
+      setDownloadingCallId(null);
     }
   }
 
@@ -176,12 +212,31 @@ export default function ResultsPublicationPage() {
                   </span>
                 </div>
 
+                <div className="mb-4 p-3 rounded-lg bg-muted/40 border border-border">
+                  <p className="text-xs font-medium text-foreground mb-2">Étape 1: Générer le fichier de résultats</p>
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => handleDownloadResults(call.id)}
+                      disabled={downloadingCallId === call.id || approvedApplications.length === 0}
+                      className="w-full px-3 py-1.5 rounded-lg text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 transition-colors inline-flex items-center justify-center gap-1.5 disabled:opacity-50"
+                    >
+                      {downloadingCallId === call.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      ) : (
+                        <Download className="w-3.5 h-3.5" />
+                      )}
+                      PDF
+                    </button>
+                  </div>
+                </div>
+
                 <div className="flex gap-2">
                   <button
                     onClick={() => {
                       setSelectedCall(call);
                       setShowPreview(true);
                     }}
+                    disabled={isPublishing}
                     className="flex-1 px-4 py-2 rounded-lg text-sm font-medium text-foreground bg-muted hover:bg-muted/80 transition-colors inline-flex items-center justify-center gap-2"
                   >
                     <Eye className="w-4 h-4" />
@@ -192,13 +247,22 @@ export default function ResultsPublicationPage() {
                       setSelectedCall(call);
                       setConfirmPublish(true);
                     }}
-                    disabled={approvedApplications.length === 0}
+                    disabled={approvedApplications.length === 0 || isPublishing || !generatedCalls[call.id]}
                     className="flex-1 btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-50"
                   >
-                    <Send className="w-4 h-4" />
+                    {isPublishing && selectedCall?.id === call.id ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Send className="w-4 h-4" />
+                    )}
                     Publier
                   </button>
                 </div>
+                {!generatedCalls[call.id] && approvedApplications.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Générez d&apos;abord un fichier de résultats, puis publiez les résultats.
+                  </p>
+                )}
               </div>
             ))}
           </div>
@@ -328,10 +392,10 @@ export default function ResultsPublicationPage() {
                   setShowPreview(false);
                   setConfirmPublish(true);
                 }}
-                disabled={callsData.find(d => d.call.id === selectedCall.id)?.approvedApplications.length === 0}
+                disabled={callsData.find(d => d.call.id === selectedCall.id)?.approvedApplications.length === 0 || isPublishing || !generatedCalls[selectedCall.id]}
                 className="btn-primary inline-flex items-center gap-2 disabled:opacity-50"
               >
-                <Send className="w-4 h-4" />
+                {isPublishing ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
                 Publier les résultats
               </button>
             </div>

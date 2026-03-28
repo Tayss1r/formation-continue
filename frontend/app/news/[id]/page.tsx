@@ -167,29 +167,31 @@ export default function NewsDetailPage() {
       {/* Content */}
       <section className="pb-8 lg:pb-12">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
-          {/* Featured Image / Banner */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-            className="mb-10"
-          >
-            <div className="relative aspect-[16/9] rounded-2xl overflow-hidden shadow-lg bg-gradient-to-br from-primary-100 to-primary-50 dark:from-primary-900/30 dark:to-primary-800/20">
-              <img
-                src={getImageUrl(news.image_path ?? undefined)}
-                alt={news.title}
-                className="w-full h-full object-cover"
-                onError={(e) => {
-                  const target = e.target as HTMLImageElement;
-                  target.style.display = 'none';
-                }}
-              />
-              {/* Fallback shown behind img — visible if img fails */}
-              <div className="absolute inset-0 flex items-center justify-center -z-10">
-                <Newspaper className="w-16 h-16 text-primary-300 dark:text-primary-600" />
+          {/* Featured Image / Banner - only show if image exists */}
+          {news.image_path && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, delay: 0.2 }}
+              className="mb-10"
+            >
+              <div className="relative aspect-[16/9] rounded-2xl overflow-hidden shadow-lg bg-gradient-to-br from-primary-100 to-primary-50 dark:from-primary-900/30 dark:to-primary-800/20">
+                <img
+                  src={getImageUrl(news.image_path)}
+                  alt={news.title}
+                  className="w-full h-full object-cover"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.style.display = 'none';
+                  }}
+                />
+                {/* Fallback shown behind img — visible if img fails */}
+                <div className="absolute inset-0 flex items-center justify-center -z-10">
+                  <Newspaper className="w-16 h-16 text-primary-300 dark:text-primary-600" />
+                </div>
               </div>
-            </div>
-          </motion.div>
+            </motion.div>
+          )}
 
           {/* Article Content */}
           <motion.article

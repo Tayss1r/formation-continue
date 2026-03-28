@@ -29,15 +29,16 @@ import {
   FileText,
   CheckCircle,
   Clock,
-  Building,
   Briefcase,
 } from "lucide-react";
 import { Header } from "@/components/Header";
+import { HeroText } from "@/components/HeroText";
 import Link from "next/link";
 import { getPublicNews, NewsItem } from "@/lib/news";
-import { getActiveCalls, getPublishedResults } from "@/lib/calls";
+import { getActiveCalls } from "@/lib/calls";
+import { submitContactMessage } from "@/lib/contact";
 import { API_BASE_URL, getImageUrl } from "@/lib/config";
-import type { CallPublic, CallResults } from "@/types/call";
+import type { CallPublic } from "@/types/call";
 
 // ============ ANIMATION VARIANTS ============
 const fadeUpVariant = {
@@ -106,179 +107,120 @@ function HeroSection() {
       }} />
       
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 relative">
-        <div className="grid lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-          {/* Left Content */}
+        <motion.div
+          initial="hidden"
+          animate="visible"
+          variants={staggerContainer}
+          className="relative text-center max-w-5xl mx-auto"
+        >
           <motion.div
-            initial="hidden"
-            animate="visible"
-            variants={staggerContainer}
-            className="text-center lg:text-left"
+            aria-hidden
+            className="absolute -top-8 left-[16%] hidden md:block w-3 h-3 rounded-full bg-primary-400/70"
+            animate={{ y: [0, -8, 0], opacity: [0.5, 1, 0.5] }}
+            transition={{ duration: 3.2, repeat: Infinity, ease: "easeInOut" }}
+          />
+          <motion.div
+            aria-hidden
+            className="absolute top-8 right-[18%] hidden md:block w-2.5 h-2.5 rounded-full bg-amber-400/80"
+            animate={{ y: [0, 10, 0], x: [0, -5, 0], opacity: [0.45, 1, 0.45] }}
+            transition={{ duration: 3.8, repeat: Infinity, ease: "easeInOut", delay: 0.3 }}
+          />
+
+          <motion.div
+            variants={fadeUpVariant}
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary-100/90 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 mb-8"
           >
-            {/* Badge */}
-            <motion.div 
-              variants={fadeUpVariant}
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary-100 dark:bg-primary-900/30 border border-primary-200 dark:border-primary-800 mb-6"
-            >
-              <GraduationCap className="w-4 h-4 text-primary-600 dark:text-primary-400" />
-              <span className="text-sm font-medium text-primary-700 dark:text-primary-300">
-                Formation Continue - ISET Rades
-              </span>
-            </motion.div>
+            <GraduationCap className="w-4 h-4 text-primary-600 dark:text-primary-400" />
+            <span className="text-sm font-medium text-primary-700 dark:text-primary-300">
+              Formation Continue - ISET Rades
+            </span>
+          </motion.div>
 
-            {/* Headline */}
-            <motion.h1 
-              variants={fadeUpVariant}
-              className="heading-display text-4xl sm:text-5xl lg:text-[3.5rem] text-slate-900 dark:text-white mb-6"
-            >
-              Investissez dans les{" "}
-              <span className="gradient-text">compétences</span>{" "}
-              de vos équipes
-            </motion.h1>
+          <motion.div
+            variants={fadeUpVariant}
+            className="flex justify-center"
+          >
+            <HeroText
+              className="max-w-4xl"
+              headlineStart="Investissez dans"
+              highlightPhrase="les compétances"
+              headlineEnd="de vos équipes !!!"
+              supportStart=""
+              supportEmphasis=""
+            />
+          </motion.div>
 
-            {/* Subtitle */}
-            <motion.p 
-              variants={fadeUpVariant}
-              className="text-lg text-slate-600 dark:text-slate-400 mb-8 max-w-xl mx-auto lg:mx-0"
-            >
-              Notre université propose des formations professionnelles certifiantes 
-              pour les entreprises et les particuliers. Des programmes adaptés 
-              à chaque secteur, dispensés par des experts reconnus.
-            </motion.p>
+          <motion.div
+            variants={fadeUpVariant}
+            className="flex items-center justify-center gap-2 mt-4"
+          >
+            <motion.div
+              className="h-1.5 w-20 rounded-full bg-primary-400/70"
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 80, opacity: 1 }}
+              transition={{ duration: 0.55, delay: 0.45 }}
+            />
+            <motion.div
+              className="h-1.5 w-10 rounded-full bg-amber-400/80"
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 40, opacity: 1 }}
+              transition={{ duration: 0.55, delay: 0.6 }}
+            />
+            <motion.div
+              className="h-1.5 w-16 rounded-full bg-primary-300/70"
+              initial={{ width: 0, opacity: 0 }}
+              animate={{ width: 64, opacity: 1 }}
+              transition={{ duration: 0.55, delay: 0.75 }}
+            />
+          </motion.div>
 
-            {/* CTA Buttons */}
-            <motion.div 
-              variants={fadeUpVariant}
-              className="flex flex-col sm:flex-row items-center justify-center lg:justify-start gap-4"
+          <motion.p
+            variants={fadeUpVariant}
+            className="text-base sm:text-lg text-slate-600 dark:text-slate-400 mt-6 mb-9 max-w-2xl mx-auto"
+          >
+            Des formations professionnelles certifiantes, concues pour renforcer
+            les competences de vos equipes et accelerer votre impact metier.
+          </motion.p>
+
+          <motion.div
+            variants={fadeUpVariant}
+            className="flex justify-center"
+            whileHover={{ scale: 1.02 }}
+          >
+            <Link
+              href="/courses"
+              className="btn-primary inline-flex items-center justify-center gap-2"
             >
-              <Link
-                href="/courses"
-                className="w-full sm:w-auto btn-primary inline-flex items-center justify-center gap-2"
+              Parcourir les Formations
+              <motion.span
+                animate={{ x: [0, 4, 0] }}
+                transition={{ duration: 1.2, repeat: Infinity, ease: "easeInOut" }}
               >
-                Parcourir les Formations
                 <ArrowRight className="w-5 h-5" />
-              </Link>
-              <a
-                href="#how-it-works"
-                className="w-full sm:w-auto btn-secondary inline-flex items-center justify-center gap-2"
-              >
-                Comment ça marche
-              </a>
-            </motion.div>
-
-            {/* Trust Indicators */}
-            <motion.div 
-              variants={fadeUpVariant}
-              className="mt-12 pt-8 border-t border-slate-200 dark:border-slate-800"
-            >
-              <div className="grid grid-cols-3 gap-8">
-                {[
-                  { value: "500+", label: "Professionnels formés" },
-                  { value: "50+", label: "Formations disponibles" },
-                  { value: "98%", label: "Taux de satisfaction" },
-                ].map((stat, index) => (
-                  <motion.div 
-                    key={index} 
-                    className="text-center lg:text-left"
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.5, delay: 0.8 + index * 0.15 }}
-                  >
-                    <div className="text-2xl sm:text-3xl font-bold text-primary-600 dark:text-primary-400">
-                      {stat.value}
-                    </div>
-                    <div className="text-sm text-slate-500 dark:text-slate-400">
-                      {stat.label}
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </motion.div>
+              </motion.span>
+            </Link>
           </motion.div>
 
-          {/* Right Visual - Dashboard Mockup */}
           <motion.div
-            initial={{ opacity: 0, x: 40 }}
-            animate={{ opacity: 1, x: 0 }}
-            transition={{ duration: 0.8, delay: 0.3, ease: "easeOut" }}
-            className="relative hidden lg:block"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: [0, -6, 0] }}
+            transition={{ duration: 3.1, delay: 0.9, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute -top-2 left-8 hidden md:flex items-center gap-2 px-3 py-2 rounded-xl bg-white/75 dark:bg-slate-900/50 border border-primary-100 dark:border-primary-800"
           >
-            <div className="relative">
-              {/* Main Dashboard Card */}
-              <div className="card-elevated p-6 rounded-2xl">
-                <div className="flex items-center justify-between mb-6">
-                  <div>
-                    <p className="text-sm text-slate-500 dark:text-slate-400">Tableau de bord</p>
-                    <h3 className="text-lg font-semibold text-slate-900 dark:text-white">Formations en cours</h3>
-                  </div>
-                  <div className="w-10 h-10 rounded-xl bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-                    <GraduationCap className="w-5 h-5 text-primary-600 dark:text-primary-400" />
-                  </div>
-                </div>
-                
-                {/* Progress Items */}
-                <div className="space-y-4">
-                  {[
-                    { name: "Management d'équipe", progress: 85, color: "bg-primary-500" },
-                    { name: "Gestion de projet Agile", progress: 60, color: "bg-emerald-500" },
-                    { name: "Communication digitale", progress: 35, color: "bg-amber-500" },
-                  ].map((item, index) => (
-                    <div key={index}>
-                      <div className="flex justify-between text-sm mb-2">
-                        <span className="text-slate-700 dark:text-slate-300">{item.name}</span>
-                        <span className="text-slate-500">{item.progress}%</span>
-                      </div>
-                      <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <motion.div 
-                          initial={{ width: 0 }}
-                          animate={{ width: `${item.progress}%` }}
-                          transition={{ duration: 1, delay: 0.5 + index * 0.2, ease: "easeOut" }}
-                          className={`h-full ${item.color} rounded-full`}
-                        />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Floating Card - Certificate */}
-              <motion.div
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 0.8, type: "spring", stiffness: 100 }}
-                className="absolute -bottom-6 -left-6 card-elevated p-4 rounded-xl shadow-elevated animate-float"
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center">
-                    <Award className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-900 dark:text-white">Certificat obtenu</p>
-                    <p className="text-xs text-slate-500">Management Avancé</p>
-                  </div>
-                </div>
-              </motion.div>
-
-              {/* Floating Card - Notification */}
-              <motion.div
-                initial={{ opacity: 0, y: -20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.6, delay: 1, type: "spring", stiffness: 100 }}
-                className="absolute -top-4 -right-4 card-elevated p-4 rounded-xl shadow-elevated animate-float"
-                style={{ animationDelay: "2s" }}
-              >
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-lg bg-primary-100 dark:bg-primary-900/30 flex items-center justify-center">
-                    <Users className="w-5 h-5 text-primary-600" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-medium text-slate-900 dark:text-white">+12 inscrits</p>
-                    <p className="text-xs text-slate-500">Cette semaine</p>
-                  </div>
-                </div>
-              </motion.div>
-            </div>
+            <Star className="w-4 h-4 text-amber-500" />
+            <span className="text-xs text-slate-700 dark:text-slate-300">Parcours flexible</span>
           </motion.div>
-        </div>
+
+          <motion.div
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: [0, -6, 0] }}
+            transition={{ duration: 3.4, delay: 1.05, repeat: Infinity, ease: "easeInOut" }}
+            className="absolute top-10 right-6 hidden md:flex items-center gap-2 px-3 py-2 rounded-xl bg-white/75 dark:bg-slate-900/50 border border-primary-100 dark:border-primary-800"
+          >
+            <Users className="w-4 h-4 text-primary-600" />
+            <span className="text-xs text-slate-700 dark:text-slate-300">Experts reconnus</span>
+          </motion.div>
+        </motion.div>
       </div>
     </section>
   );
@@ -432,7 +374,7 @@ function DepartmentsSection() {
   ];
 
   return (
-    <section id="departments" className="py-16 lg:py-20" ref={ref}>
+    <section id="departments" className="pt-16 pb-6 lg:pt-20 lg:pb-8" ref={ref}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <motion.div
@@ -682,125 +624,6 @@ function ActiveCallsSection() {
   );
 }
 
-// ============ PUBLISHED RESULTS SECTION ============
-function PublishedResultsSection() {
-  const ref = useRef(null);
-  const isInView = useInView(ref, { once: true, margin: "-100px" });
-  const [results, setResults] = useState<CallResults[]>([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    async function fetchResults() {
-      try {
-        const response = await getPublishedResults();
-        setResults(response.results || []);
-      } catch (error) {
-        console.error("Error fetching published results:", error);
-      } finally {
-        setLoading(false);
-      }
-    }
-    fetchResults();
-  }, []);
-
-  if (loading || results.length === 0) {
-    return null; // Don't show section if no results
-  }
-
-  return (
-    <section id="results" className="py-16 lg:py-20" ref={ref}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        {/* Section Header */}
-        <motion.div
-          initial="hidden"
-          animate={isInView ? "visible" : "hidden"}
-          variants={fadeUpVariant}
-          className="text-center mb-12"
-        >
-          <h2 className="heading-display text-3xl sm:text-4xl text-slate-900 dark:text-white mb-4">
-            Résultats <span className="gradient-text">publiés</span>
-          </h2>
-          <p className="text-lg text-slate-600 dark:text-slate-400 max-w-2xl mx-auto">
-            Consultez les entreprises admises aux dernières sessions de formation
-          </p>
-        </motion.div>
-
-        {/* Results Grid */}
-        <motion.div 
-          initial="hidden"
-          animate={isInView ? "visible" : "hidden"}
-          variants={staggerContainer}
-          className="grid md:grid-cols-2 gap-6"
-        >
-          {results.slice(0, 4).map((result) => (
-            <motion.div
-              key={result.id}
-              variants={scaleInVariant}
-            >
-              <div className="card-elevated p-6 h-full">
-                {/* Header */}
-                <div className="flex items-start justify-between mb-4">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900/50 dark:text-green-300">
-                    {result.department_display}
-                  </span>
-                  <span className="inline-flex items-center gap-1 text-sm text-slate-500 dark:text-slate-400">
-                    <CheckCircle className="w-4 h-4 text-green-500" />
-                    {result.total_admitted} admis
-                  </span>
-                </div>
-                
-                {/* Content */}
-                <h3 className="text-lg font-semibold text-slate-900 dark:text-white mb-2">
-                  {result.title}
-                </h3>
-                <p className="text-sm text-slate-500 dark:text-slate-400 mb-4">
-                  Réf: {result.reference_number}
-                </p>
-                
-                {/* Admitted Companies Preview */}
-                {result.admitted_companies.length > 0 && (
-                  <div className="space-y-2 mb-4">
-                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                      Entreprises admises:
-                    </span>
-                    <div className="flex flex-wrap gap-2">
-                      {result.admitted_companies.slice(0, 3).map((company) => (
-                        <span
-                          key={company.id}
-                          className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-xs bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300"
-                        >
-                          <Building className="w-3 h-3" />
-                          {company.name}
-                        </span>
-                      ))}
-                      {result.admitted_companies.length > 3 && (
-                        <span className="inline-flex items-center px-2 py-1 rounded-md text-xs bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
-                          +{result.admitted_companies.length - 3} autres
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                )}
-                
-                {/* Footer */}
-                <div className="pt-4 border-t border-slate-200 dark:border-slate-700">
-                  <Link
-                    href={`/calls/${result.id}/results`}
-                    className="inline-flex items-center text-primary-600 dark:text-primary-400 text-sm font-medium hover:underline"
-                  >
-                    Voir tous les résultats
-                    <ArrowRight className="w-4 h-4 ml-1" />
-                  </Link>
-                </div>
-              </div>
-            </motion.div>
-          ))}
-        </motion.div>
-      </div>
-    </section>
-  );
-}
-
 // ============ NEWS SECTION ============
 function NewsSection() {
   const ref = useRef(null);
@@ -847,7 +670,7 @@ function NewsSection() {
 
   // ALWAYS show section - never return null
   return (
-    <section id="news" className="py-16 lg:py-20" ref={ref}>
+    <section id="news" className="pt-6 pb-16 lg:pt-8 lg:pb-20" ref={ref}>
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Section Header */}
         <motion.div
@@ -963,24 +786,24 @@ function FAQSection() {
 
   const faqs = [
     {
-      question: "Comment une entreprise peut-elle inscrire ses employés ?",
-      answer: "L'entreprise commence par créer un compte sur notre plateforme, puis sélectionne la formation souhaitée et réserve le nombre de places nécessaires. Une fois la session confirmée par notre équipe, un code d'accès unique est envoyé pour permettre aux employés de s'inscrire individuellement."
+      question: "Comment démarrer une candidature entreprise ?",
+      answer: "Depuis la section Appels à candidatures ouverts, ouvrez l'appel concerné puis déposez les documents demandés avant la date limite affichée."
     },
     {
-      question: "Quels documents sont nécessaires pour l'inscription ?",
-      answer: "Chaque participant doit fournir une pièce d'identité valide (carte d'identité nationale ou passeport) lors de son inscription. Ce document est nécessaire pour la vérification d'identité et la délivrance du certificat en fin de formation."
+      question: "Quand les employés peuvent-ils envoyer leurs documents ?",
+      answer: "Les employés soumettent leur dossier uniquement après validation de la candidature de leur entreprise par le coordinateur."
     },
     {
-      question: "Comment les certificats sont-ils délivrés ?",
-      answer: "Les certificats officiels sont délivrés à la fin de chaque formation, après validation des présences et, le cas échéant, réussite des évaluations. Ils sont disponibles en format numérique sur l'espace personnel de chaque participant."
+      question: "Quels formats de documents sont acceptés ?",
+      answer: "Les formats autorisés dépendent du document demandé dans l'appel. En pratique, PDF et formats bureautiques standards sont pris en charge selon les exigences publiées."
     },
     {
-      question: "Quelle est la politique d'annulation ?",
-      answer: "Les réservations peuvent être annulées gratuitement jusqu'à 7 jours avant le début de la session. Au-delà de ce délai, des frais d'annulation peuvent s'appliquer. Contactez notre équipe pour toute demande spécifique."
+      question: "Comment suivre l'état d'avancement d'un dossier ?",
+      answer: "Chaque espace utilisateur affiche les statuts mis à jour en temps réel: en attente, en examen, informations supplémentaires requises, approuvée ou rejetée."
     },
     {
-      question: "Les formations sont-elles certifiantes ?",
-      answer: "Oui, toutes nos formations sont certifiantes et reconnues par les instances professionnelles. Nos programmes sont conçus en collaboration avec des experts du secteur et répondent aux standards de qualité les plus exigeants."
+      question: "Où consulter les résultats publiés ?",
+      answer: "Les résultats officiels sont annoncés dans la section Actualités, avec les informations publiées pour chaque appel concerné."
     },
   ];
 
@@ -1057,17 +880,118 @@ function ContactSection() {
   const ref = useRef(null);
   const isInView = useInView(ref, { once: true, margin: "-100px" });
   const [formData, setFormData] = useState({ name: "", email: "", message: "" });
+  const [formErrors, setFormErrors] = useState<{ name?: string; email?: string; message?: string }>({});
+  const [touchedFields, setTouchedFields] = useState<{ name: boolean; email: boolean; message: boolean }>({
+    name: false,
+    email: false,
+    message: false,
+  });
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+  const [submitStatus, setSubmitStatus] = useState<"idle" | "success" | "error">("idle");
+  const [submitMessage, setSubmitMessage] = useState("");
+
+  function validate(values = formData) {
+    const nextErrors: { name?: string; email?: string; message?: string } = {};
+    if (!values.name.trim()) {
+      nextErrors.name = "Le nom complet est requis.";
+    } else if (values.name.trim().length < 2) {
+      nextErrors.name = "Le nom doit contenir au moins 2 caractères.";
+    }
+
+    if (!values.email.trim()) {
+      nextErrors.email = "L'adresse email est requise.";
+    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(values.email.trim())) {
+      nextErrors.email = "Veuillez saisir une adresse email valide.";
+    }
+
+    if (!values.message.trim()) {
+      nextErrors.message = "Le message est requis.";
+    } else if (values.message.trim().length < 10) {
+      nextErrors.message = "Le message doit contenir au moins 10 caractères.";
+    }
+
+    return nextErrors;
+  }
+
+  function validateField(field: "name" | "email" | "message", value: string) {
+    if (field === "name") {
+      if (!value.trim()) return "Le nom complet est requis.";
+      if (value.trim().length < 2) return "Le nom doit contenir au moins 2 caractères.";
+      return undefined;
+    }
+
+    if (field === "email") {
+      if (!value.trim()) return "L'adresse email est requise.";
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim())) return "Veuillez saisir une adresse email valide.";
+      return undefined;
+    }
+
+    if (!value.trim()) return "Le message est requis.";
+    if (value.trim().length < 10) return "Le message doit contenir au moins 10 caractères.";
+    return undefined;
+  }
+
+  function handleFieldChange(field: "name" | "email" | "message", value: string) {
+    const nextValues = { ...formData, [field]: value };
+    setFormData(nextValues);
+
+    if (touchedFields[field]) {
+      setFormErrors((prev) => ({
+        ...prev,
+        [field]: validateField(field, value),
+      }));
+    }
+
+    if (submitStatus !== "idle") {
+      setSubmitStatus("idle");
+      setSubmitMessage("");
+    }
+  }
+
+  function handleFieldBlur(field: "name" | "email" | "message") {
+    setTouchedFields((prev) => ({ ...prev, [field]: true }));
+    setFormErrors((prev) => ({
+      ...prev,
+      [field]: validateField(field, formData[field]),
+    }));
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const errors = validate();
+    setTouchedFields({ name: true, email: true, message: true });
+    setFormErrors(errors);
+    if (Object.keys(errors).length > 0) {
+      setSubmitStatus("error");
+      setSubmitMessage("Merci de corriger les champs en erreur.");
+      return;
+    }
+
     setIsSubmitting(true);
-    // Simulate form submission
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    setIsSubmitting(false);
-    setSubmitted(true);
-    setFormData({ name: "", email: "", message: "" });
+    setSubmitStatus("idle");
+    setSubmitMessage("");
+
+    try {
+      const response = await submitContactMessage({
+        name: formData.name.trim(),
+        email: formData.email.trim(),
+        message: formData.message.trim(),
+      });
+
+      setSubmitStatus("success");
+      setSubmitMessage(response.message || "Message envoyé avec succès.");
+      setFormData({ name: "", email: "", message: "" });
+      setTouchedFields({ name: false, email: false, message: false });
+      setFormErrors({});
+    } catch (err) {
+      const message = err && typeof err === "object" && "message" in err
+        ? String((err as { message?: string }).message)
+        : "Une erreur est survenue lors de l'envoi. Veuillez réessayer.";
+      setSubmitStatus("error");
+      setSubmitMessage(message);
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   return (
@@ -1133,7 +1057,7 @@ function ContactSection() {
             variants={fadeUpVariant}
           >
             <div className="card-elevated p-8">
-              {submitted ? (
+              {submitStatus === "success" ? (
                 <div className="text-center py-8">
                   <div className="w-16 h-16 rounded-full bg-emerald-100 dark:bg-emerald-900/30 flex items-center justify-center mx-auto mb-4">
                     <svg className="w-8 h-8 text-emerald-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
@@ -1144,10 +1068,13 @@ function ContactSection() {
                     Message envoyé
                   </h3>
                   <p className="text-slate-600 dark:text-slate-400">
-                    Nous vous répondrons dans les plus brefs délais.
+                    {submitMessage}
                   </p>
                   <button
-                    onClick={() => setSubmitted(false)}
+                    onClick={() => {
+                      setSubmitStatus("idle");
+                      setSubmitMessage("");
+                    }}
                     className="mt-6 text-primary-600 dark:text-primary-400 font-medium hover:underline"
                   >
                     Envoyer un autre message
@@ -1164,10 +1091,14 @@ function ContactSection() {
                       id="name"
                       required
                       value={formData.name}
-                      onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                      onChange={(e) => handleFieldChange("name", e.target.value)}
+                      onBlur={() => handleFieldBlur("name")}
                       className="form-input"
                       placeholder="Votre nom"
                     />
+                    {formErrors.name && (
+                      <p className="mt-1 text-xs text-red-600 dark:text-red-400">{formErrors.name}</p>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="email" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -1178,10 +1109,14 @@ function ContactSection() {
                       id="email"
                       required
                       value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      onChange={(e) => handleFieldChange("email", e.target.value)}
+                      onBlur={() => handleFieldBlur("email")}
                       className="form-input"
                       placeholder="votre@email.com"
                     />
+                    {formErrors.email && (
+                      <p className="mt-1 text-xs text-red-600 dark:text-red-400">{formErrors.email}</p>
+                    )}
                   </div>
                   <div>
                     <label htmlFor="message" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
@@ -1191,11 +1126,20 @@ function ContactSection() {
                       id="message"
                       required
                       value={formData.message}
-                      onChange={(e) => setFormData({ ...formData, message: e.target.value })}
+                      onChange={(e) => handleFieldChange("message", e.target.value)}
+                      onBlur={() => handleFieldBlur("message")}
                       className="form-input form-textarea"
                       placeholder="Comment pouvons-nous vous aider ?"
                     />
+                    {formErrors.message && (
+                      <p className="mt-1 text-xs text-red-600 dark:text-red-400">{formErrors.message}</p>
+                    )}
                   </div>
+                  {submitStatus === "error" && submitMessage && (
+                    <div className="rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-700 dark:text-red-400">
+                      {submitMessage}
+                    </div>
+                  )}
                   <button
                     type="submit"
                     disabled={isSubmitting}
@@ -1239,7 +1183,6 @@ function Footer() {
     ],
     "Ressources": [
       { name: "FAQ", href: "#faq" },
-      { name: "Comment ça marche", href: "#how-it-works" },
       { name: "Départements", href: "#departments" },
     ],
     "Contact": [
@@ -1317,7 +1260,6 @@ export default function HomePage() {
       <HeroSection />
       <ActiveCallsSection />
       <DepartmentsSection />
-      <PublishedResultsSection />
       <NewsSection />
       <FAQSection />
       <ContactSection />

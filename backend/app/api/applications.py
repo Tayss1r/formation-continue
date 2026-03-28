@@ -5,10 +5,26 @@ API endpoints for Company Applications.
 from typing import Optional
 import os
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, status, Query
+from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_session
-from ..db.models import User, UserRole, CallStatus, ApplicationStatus, DocumentReviewStatus
+from ..db.models import (
+    User,
+    UserRole,
+    CallStatus,
+    ApplicationStatus,
+    DocumentReviewStatus,
+    EmployeeSubmissionStatus,
+    AttendanceStatus,
+    CompanyApplication,
+    EmployeeSubmission,
+    EmployeeProfile,
+    Cohort,
+    CohortSession,
+    CohortSessionAttendance,
+)
 from ..dependencies import get_current_user, RoleChecker
 from ..services.application_service import ApplicationService
 from ..services.call_service import CallService
@@ -26,7 +42,10 @@ from ..schemas.application_schema import (
     DocumentOut,
     DocumentReviewRequest,
     DocumentActionResponse,
+    CompanyAttendanceEmployeeOut,
+    CompanyAttendanceSummaryResponse,
 )
+from ..services.invitation_service import InvitationService
 from ..error import (
     CallNotFound,
     ApplicationNotFound,
@@ -433,7 +452,6 @@ async def submit_application(
         user=current_user,
         action="submit",
         application_id=app.id,
-        call_id=app.call_id,
         old_status="pending",
         new_status="submitted",
         session=session,
@@ -444,6 +462,167 @@ async def submit_application(
         message="Candidature soumise avec succès",
         application=build_application_out(app),
     )
+
+
+@applications_router.get(
+    "/attendance-summary",
+    response_model=CompanyAttendanceSummaryResponse,
+)
+async def get_company_attendance_summary(
+    current_user: User = Depends(require_company),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Return admitted employees attendance summary for the connected company.
+    Company only.
+    """
+    company = current_user.company
+    if not company:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Vous devez être associé à une entreprise",
+        )
+
+    submissions_stmt = (
+        select(EmployeeSubmission)
+        .join(CompanyApplication, EmployeeSubmission.company_application_id == CompanyApplication.id)
+        .where(CompanyApplication.company_id == company.id)
+        .where(CompanyApplication.status == ApplicationStatus.APPROVED)
+        .where(EmployeeSubmission.status == EmployeeSubmissionStatus.APPROVED)
+        .options(
+            selectinload(EmployeeSubmission.employee).selectinload(EmployeeProfile.user),
+            selectinload(EmployeeSubmission.company_application),
+        )
+    )
+
+    submissions = (await session.execute(submissions_stmt)).scalars().all()
+
+    if not submissions:
+        return CompanyAttendanceSummaryResponse(attendance=[], total=0)
+
+    employee_ids = sorted({submission.employee_id for submission in submissions})
+    call_ids = sorted({submission.company_application.call_id for submission in submissions if submission.company_application})
+
+    cohort_context: dict[int, dict[str, str]] = {}
+    session_context: dict[int, dict[str, object]] = {}
+    if call_ids:
+        cohorts_stmt = (
+            select(Cohort)
+            .where(Cohort.call_id.in_(call_ids))
+            .options(
+                selectinload(Cohort.course),
+                selectinload(Cohort.sessions),
+            )
+        )
+        cohorts = (await session.execute(cohorts_stmt)).scalars().all()
+
+        for cohort in cohorts:
+            cohort_context[cohort.id] = {
+                "course_title": cohort.course.title if cohort.course and cohort.course.title else "",
+                "cohort_title": cohort.name or "",
+            }
+            for session_item in cohort.sessions or []:
+                session_context[session_item.id] = {
+                    "session_title": session_item.title or "",
+                    "cohort_id": cohort.id,
+                }
+
+    attendance_stmt = (
+        select(
+            CohortSessionAttendance.employee_id,
+            CohortSessionAttendance.status,
+            CohortSessionAttendance.session_id,
+        )
+        .join(CohortSession, CohortSession.id == CohortSessionAttendance.session_id)
+        .join(Cohort, Cohort.id == CohortSession.cohort_id)
+        .where(CohortSessionAttendance.employee_id.in_(employee_ids))
+        .where(Cohort.call_id.in_(call_ids))
+    )
+
+    attendance_rows = (await session.execute(attendance_stmt)).all()
+
+    metrics_by_employee: dict[int, dict[str, int]] = {
+        employee_id: {
+            AttendanceStatus.PRESENT.value: 0,
+            AttendanceStatus.LATE.value: 0,
+            AttendanceStatus.ABSENT.value: 0,
+        }
+        for employee_id in employee_ids
+    }
+
+    context_titles_by_employee: dict[int, dict[str, set[str]]] = {
+        employee_id: {
+            "course_titles": set(),
+            "cohort_titles": set(),
+            "session_titles": set(),
+        }
+        for employee_id in employee_ids
+    }
+
+    for employee_id, attendance_status, session_id in attendance_rows:
+        status_value = (
+            attendance_status.value if hasattr(attendance_status, "value") else str(attendance_status)
+        )
+        if status_value in metrics_by_employee[employee_id]:
+            metrics_by_employee[employee_id][status_value] += 1
+
+            session_info = session_context.get(session_id)
+            if not session_info:
+                continue
+
+            employee_titles = context_titles_by_employee[employee_id]
+            session_title = str(session_info.get("session_title") or "")
+            if session_title:
+                employee_titles["session_titles"].add(session_title)
+
+            cohort_info = cohort_context.get(int(session_info.get("cohort_id")))
+            if not cohort_info:
+                continue
+
+            cohort_title = cohort_info.get("cohort_title") or ""
+            course_title = cohort_info.get("course_title") or ""
+            if cohort_title:
+                employee_titles["cohort_titles"].add(cohort_title)
+            if course_title:
+                employee_titles["course_titles"].add(course_title)
+
+    summary_by_employee: dict[int, CompanyAttendanceEmployeeOut] = {}
+    for submission in submissions:
+        employee = submission.employee
+        if not employee or not employee.user:
+            continue
+
+        employee_metrics = metrics_by_employee.get(submission.employee_id, {})
+        present_count = employee_metrics.get(AttendanceStatus.PRESENT.value, 0)
+        late_count = employee_metrics.get(AttendanceStatus.LATE.value, 0)
+        absent_count = employee_metrics.get(AttendanceStatus.ABSENT.value, 0)
+        total_sessions_marked = present_count + late_count + absent_count
+        presence_percentage = (
+            round(((present_count + late_count) / total_sessions_marked) * 100, 1)
+            if total_sessions_marked > 0
+            else 0.0
+        )
+
+        employee_titles = context_titles_by_employee.get(submission.employee_id, {})
+
+        summary_by_employee[employee.id] = CompanyAttendanceEmployeeOut(
+            employee_id=employee.id,
+            employee_name=employee.user.fullname,
+            employee_email=employee.user.email,
+            company_name=company.name,
+            present_count=present_count,
+            late_count=late_count,
+            absent_count=absent_count,
+            total_sessions_marked=total_sessions_marked,
+            presence_percentage=presence_percentage,
+            course_titles=sorted(employee_titles.get("course_titles", set())),
+            cohort_titles=sorted(employee_titles.get("cohort_titles", set())),
+            session_titles=sorted(employee_titles.get("session_titles", set())),
+        )
+
+    summary = list(summary_by_employee.values())
+    summary.sort(key=lambda item: item.presence_percentage, reverse=True)
+    return CompanyAttendanceSummaryResponse(attendance=summary, total=len(summary))
 
 
 # =============================================================================
@@ -569,6 +748,12 @@ async def review_document(
         call = await CallService.get_call_by_id(app.call_id, session)
         if call and call.created_by_id != current_user.id:
             raise InsufficientPermission()
+
+    if app.status in [ApplicationStatus.APPROVED, ApplicationStatus.REJECTED]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cette candidature a déjà une décision finale",
+        )
     
     # Find document
     document = None
@@ -619,25 +804,51 @@ async def approve_application(
         call = await CallService.get_call_by_id(app.call_id, session)
         if call and call.created_by_id != current_user.id:
             raise InsufficientPermission()
+
+    if app.status in [ApplicationStatus.APPROVED, ApplicationStatus.REJECTED]:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Cette candidature a déjà une décision finale",
+        )
     
     old_status = app.status.value if hasattr(app.status, 'value') else app.status
     
     app = await ApplicationService.approve_application(
         application=app,
-        decision=approval_data.decision,
-        notes=approval_data.notes,
+        coordinator_id=current_user.id,
+        decision_notes=approval_data.decision_notes,
         session=session,
     )
+    
+    # Create company invitation and send email
+    try:
+        invitation = await InvitationService.create_company_invitation(
+            application=app,
+            session=session,
+        )
+        # Get company email
+        company_email = app.company.user.email if app.company and app.company.user else None
+        company_name = app.company.name if app.company else "Entreprise"
+        call_title = app.call.title if app.call else "Appel"
+        if company_email:
+            InvitationService.send_company_approval_email(
+                company_email=company_email,
+                company_name=company_name,
+                call_title=call_title,
+                invitation_token=invitation.token,
+            )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Failed to create invitation: {e}")
     
     # Audit log
     await AuditService.log_application_action(
         user=current_user,
         action="approve",
         application_id=app.id,
-        call_id=app.call_id,
         old_status=old_status,
         new_status="approved",
-        notes=approval_data.notes,
+        notes=approval_data.decision_notes,
         session=session,
     )
     await session.commit()
@@ -676,8 +887,9 @@ async def reject_application(
     
     app = await ApplicationService.reject_application(
         application=app,
-        decision=rejection_data.decision,
-        notes=rejection_data.notes,
+        coordinator_id=current_user.id,
+        rejection_reason=rejection_data.rejection_reason,
+        decision_notes=rejection_data.decision_notes,
         session=session,
     )
     
@@ -686,10 +898,9 @@ async def reject_application(
         user=current_user,
         action="reject",
         application_id=app.id,
-        call_id=app.call_id,
         old_status=old_status,
         new_status="rejected",
-        notes=rejection_data.notes,
+        notes=rejection_data.decision_notes,
         session=session,
     )
     await session.commit()
@@ -728,7 +939,8 @@ async def request_additional_info(
     
     app = await ApplicationService.request_additional_info(
         application=app,
-        request_message=request_data.message,
+        coordinator_id=current_user.id,
+        decision_notes=request_data.message,
         session=session,
     )
     
@@ -737,9 +949,8 @@ async def request_additional_info(
         user=current_user,
         action="request_info",
         application_id=app.id,
-        call_id=app.call_id,
         old_status=old_status,
-        new_status="additional_info_requested",
+        new_status="additional_info_required",
         notes=request_data.message,
         session=session,
     )

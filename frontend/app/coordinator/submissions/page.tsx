@@ -5,9 +5,6 @@ import Link from "next/link";
 import {
   Search,
   Eye,
-  CheckCircle,
-  XCircle,
-  MoreVertical,
   Building2,
   FileText,
   Calendar,
@@ -17,7 +14,7 @@ import {
 } from "lucide-react";
 import { getMyCalls } from "@/lib/coordinator";
 import { getCallApplications } from "@/lib/applications";
-import { getApplicationSubmissions, approveSubmission, rejectSubmission } from "@/lib/submissions";
+import { getApplicationSubmissions, getSubmissionDetails } from "@/lib/submissions";
 import { StatusBadge, SearchInput, FilterSelect, Pagination, TableSkeleton, EmptyState } from "@/components/coordinator/CoordinatorUI";
 import type { CoordinatorCall } from "@/types/coordinator";
 import type { Application } from "@/types/application";
@@ -49,14 +46,6 @@ export default function EmployeeSubmissionsPage() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
   
-  // Action states
-  const [activeDropdown, setActiveDropdown] = useState<number | null>(null);
-  const [isActionLoading, setIsActionLoading] = useState(false);
-  const [actionDialog, setActionDialog] = useState<{
-    type: 'approve' | 'reject';
-    submissionId: number;
-    notes: string;
-  } | null>(null);
 
   useEffect(() => {
     fetchAllSubmissions();
@@ -66,23 +55,17 @@ export default function EmployeeSubmissionsPage() {
     filterSubmissions();
   }, [submissions, searchQuery, statusFilter]);
 
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handleClick = () => setActiveDropdown(null);
-    document.addEventListener("click", handleClick);
-    return () => document.removeEventListener("click", handleClick);
-  }, []);
-
   async function fetchAllSubmissions() {
     setIsLoading(true);
     setError(null);
     try {
       // Get all calls
       const callsRes = await getMyCalls();
+      const activeCalls = callsRes.calls.filter((call) => call.status !== "closed");
       
       // Fetch approved applications for all calls in parallel
       const appResults = await Promise.all(
-        callsRes.calls.map(async (call) => {
+        activeCalls.map(async (call) => {
           try {
             const appsRes = await getCallApplications(call.id, 'approved');
             return { call, applications: appsRes.applications };
@@ -99,11 +82,26 @@ export default function EmployeeSubmissionsPage() {
           applications.map(async (app) => {
             try {
               const subsRes = await getApplicationSubmissions(app.id);
-              return subsRes.submissions.map((sub) => ({
-                ...sub,
-                company_name: app.company?.name,
-                call_title: call.title,
-              }));
+              const enriched = await Promise.all(
+                subsRes.submissions.map(async (sub) => {
+                  let documents = sub.documents || [];
+                  try {
+                    const details = await getSubmissionDetails(sub.id);
+                    documents = details.documents || documents;
+                  } catch {
+                    // Keep fallback list payload when details are unavailable
+                  }
+
+                  return {
+                    ...sub,
+                    documents,
+                    company_name: app.company?.name,
+                    call_title: call.title,
+                  };
+                })
+              );
+
+              return enriched;
             } catch (err) {
               console.error(`Error fetching submissions for app ${app.id}:`, err);
               return [];
@@ -157,43 +155,6 @@ export default function EmployeeSubmissionsPage() {
     (currentPage - 1) * itemsPerPage,
     currentPage * itemsPerPage
   );
-
-  // Action handlers
-  async function handleApprove() {
-    if (!actionDialog) return;
-    
-    setIsActionLoading(true);
-    try {
-      await approveSubmission(actionDialog.submissionId, {
-        notes: actionDialog.notes || undefined,
-      });
-      fetchAllSubmissions();
-      setActionDialog(null);
-    } catch (err) {
-      console.error("Error approving:", err);
-      setError("Erreur lors de l'approbation");
-    } finally {
-      setIsActionLoading(false);
-    }
-  }
-
-  async function handleReject() {
-    if (!actionDialog) return;
-    
-    setIsActionLoading(true);
-    try {
-      await rejectSubmission(actionDialog.submissionId, {
-        notes: actionDialog.notes || undefined,
-      });
-      fetchAllSubmissions();
-      setActionDialog(null);
-    } catch (err) {
-      console.error("Error rejecting:", err);
-      setError("Erreur lors du rejet");
-    } finally {
-      setIsActionLoading(false);
-    }
-  }
 
   // Stats
   const stats = {
@@ -310,7 +271,6 @@ export default function EmployeeSubmissionsPage() {
                     <th className="text-left p-4 text-sm font-medium text-muted-foreground">Statut</th>
                     <th className="text-center p-4 text-sm font-medium text-muted-foreground">Documents</th>
                     <th className="text-left p-4 text-sm font-medium text-muted-foreground">Soumis le</th>
-                    <th className="text-right p-4 text-sm font-medium text-muted-foreground">Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -356,55 +316,6 @@ export default function EmployeeSubmissionsPage() {
                           ? new Date(sub.created_at).toLocaleDateString('fr-FR')
                           : '-'
                         }
-                      </td>
-                      <td className="p-4">
-                        <div className="flex justify-end relative">
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setActiveDropdown(activeDropdown === sub.id ? null : sub.id);
-                            }}
-                            className="p-2 hover:bg-muted rounded-lg transition-colors"
-                          >
-                            <MoreVertical className="w-4 h-4 text-muted-foreground" />
-                          </button>
-                          
-                          {activeDropdown === sub.id && (
-                            <div className="absolute right-0 top-full mt-1 w-48 bg-card border border-border rounded-xl shadow-lg py-1 z-20">
-                              <Link
-                                href={`/coordinator/submissions/${sub.id}`}
-                                className="flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted transition-colors"
-                              >
-                                <Eye className="w-4 h-4" />
-                                Voir détails
-                              </Link>
-                              {sub.status === 'submitted' && (
-                                <>
-                                  <button
-                                    onClick={() => {
-                                      setActiveDropdown(null);
-                                      setActionDialog({ type: 'approve', submissionId: sub.id, notes: '' });
-                                    }}
-                                    className="flex items-center gap-2 px-4 py-2 text-sm text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 w-full text-left transition-colors"
-                                  >
-                                    <CheckCircle className="w-4 h-4" />
-                                    Approuver
-                                  </button>
-                                  <button
-                                    onClick={() => {
-                                      setActiveDropdown(null);
-                                      setActionDialog({ type: 'reject', submissionId: sub.id, notes: '' });
-                                    }}
-                                    className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 w-full text-left transition-colors"
-                                  >
-                                    <XCircle className="w-4 h-4" />
-                                    Rejeter
-                                  </button>
-                                </>
-                              )}
-                            </div>
-                          )}
-                        </div>
                       </td>
                     </tr>
                   ))}
@@ -464,67 +375,6 @@ export default function EmployeeSubmissionsPage() {
             onPageChange={setCurrentPage}
           />
         </>
-      )}
-
-      {/* Action Dialog */}
-      {actionDialog && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div 
-            className="absolute inset-0 bg-black/50 backdrop-blur-sm"
-            onClick={() => !isActionLoading && setActionDialog(null)}
-          />
-          <div className="relative bg-card rounded-2xl shadow-elevated border border-border max-w-md w-full p-6 animate-fade-up">
-            <h3 className="text-lg font-semibold text-foreground mb-2">
-              {actionDialog.type === 'approve' && 'Approuver la soumission'}
-              {actionDialog.type === 'reject' && 'Rejeter la soumission'}
-            </h3>
-            <p className="text-sm text-muted-foreground mb-4">
-              {actionDialog.type === 'approve' && 'L\'employé sera notifié de l\'approbation.'}
-              {actionDialog.type === 'reject' && 'L\'employé sera notifié du rejet.'}
-            </p>
-            
-            <div className="mb-6">
-              <label className="block text-sm font-medium text-foreground mb-1.5">
-                Notes (optionnel)
-              </label>
-              <textarea
-                value={actionDialog.notes}
-                onChange={(e) => setActionDialog({ ...actionDialog, notes: e.target.value })}
-                placeholder="Ajouter des notes pour cette décision..."
-                rows={4}
-                className="form-input form-textarea w-full"
-              />
-            </div>
-            
-            <div className="flex gap-3 justify-end">
-              <button
-                onClick={() => setActionDialog(null)}
-                disabled={isActionLoading}
-                className="px-4 py-2 rounded-lg text-sm font-medium text-muted-foreground hover:bg-muted transition-colors disabled:opacity-50"
-              >
-                Annuler
-              </button>
-              <button
-                onClick={() => {
-                  if (actionDialog.type === 'approve') handleApprove();
-                  else handleReject();
-                }}
-                disabled={isActionLoading}
-                className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2 ${
-                  actionDialog.type === 'approve'
-                    ? 'bg-green-600 hover:bg-green-700 text-white'
-                    : 'bg-red-600 hover:bg-red-700 text-white'
-                }`}
-              >
-                {isActionLoading && (
-                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                )}
-                {actionDialog.type === 'approve' && 'Approuver'}
-                {actionDialog.type === 'reject' && 'Rejeter'}
-              </button>
-            </div>
-          </div>
-        </div>
       )}
     </div>
   );

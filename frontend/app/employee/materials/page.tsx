@@ -11,10 +11,14 @@ import {
   Search,
   FolderOpen,
 } from "lucide-react";
-import { getEmployeeMaterials, downloadMaterial, CourseMaterial } from "@/lib/materials";
+import {
+  getEmployeeTrainingMaterials,
+  type EmployeeTrainingMaterial,
+} from "@/lib/employeeTraining";
+import { downloadMaterial } from "@/lib/materials";
 
 export default function EmployeeMaterialsPage() {
-  const [materials, setMaterials] = useState<CourseMaterial[]>([]);
+  const [materials, setMaterials] = useState<EmployeeTrainingMaterial[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -25,7 +29,7 @@ export default function EmployeeMaterialsPage() {
       setIsLoading(true);
       setError(null);
       try {
-        const response = await getEmployeeMaterials();
+        const response = await getEmployeeTrainingMaterials();
         setMaterials(response.materials);
       } catch (err) {
         console.error("Failed to fetch materials:", err);
@@ -37,7 +41,7 @@ export default function EmployeeMaterialsPage() {
     fetchMaterials();
   }, []);
 
-  const handleDownload = async (material: CourseMaterial) => {
+  const handleDownload = async (material: EmployeeTrainingMaterial) => {
     setDownloadingId(material.id);
     try {
       await downloadMaterial(material.id, material.file_name);
@@ -67,19 +71,20 @@ export default function EmployeeMaterialsPage() {
   const filteredMaterials = materials.filter(
     (m) =>
       m.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      m.course_title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.course_title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      m.cohort_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
       m.file_name.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Group materials by course
-  const materialsByCourse = filteredMaterials.reduce((acc, material) => {
-    const courseTitle = material.course_title || "Autre";
-    if (!acc[courseTitle]) {
-      acc[courseTitle] = [];
+  // Group materials by cohort
+  const materialsByCohort = filteredMaterials.reduce((acc, material) => {
+    const key = `${material.cohort_id}:${material.cohort_name}`;
+    if (!acc[key]) {
+      acc[key] = [];
     }
-    acc[courseTitle].push(material);
+    acc[key].push(material);
     return acc;
-  }, {} as Record<string, CourseMaterial[]>);
+  }, {} as Record<string, EmployeeTrainingMaterial[]>);
 
   if (isLoading) {
     return (
@@ -148,9 +153,9 @@ export default function EmployeeMaterialsPage() {
           <p className="text-muted-foreground mb-4">
             Les documents seront disponibles une fois inscrit à des formations.
           </p>
-          <Link href="/employee/enroll" className="btn-primary inline-flex items-center gap-2">
+          <Link href="/employee/training" className="btn-primary inline-flex items-center gap-2">
             <BookOpen className="w-4 h-4" />
-            Voir les formations disponibles
+            Voir mon planning
           </Link>
         </div>
       ) : filteredMaterials.length === 0 ? (
@@ -165,22 +170,24 @@ export default function EmployeeMaterialsPage() {
         </div>
       ) : (
         <div className="space-y-8">
-          {Object.entries(materialsByCourse).map(([courseTitle, courseMaterials]) => (
-            <div key={courseTitle}>
-              {/* Course Header */}
+          {Object.entries(materialsByCohort).map(([cohortKey, cohortMaterials]) => {
+            const [, cohortName] = cohortKey.split(":");
+            return (
+            <div key={cohortKey}>
+              {/* Cohort Header */}
               <div className="flex items-center gap-3 mb-4">
                 <div className="p-2 rounded-lg bg-primary-100 dark:bg-primary-900/30">
                   <BookOpen className="w-4 h-4 text-primary-600 dark:text-primary-400" />
                 </div>
-                <h2 className="text-lg font-semibold text-foreground">{courseTitle}</h2>
+                <h2 className="text-lg font-semibold text-foreground">{cohortName}</h2>
                 <span className="text-sm text-muted-foreground">
-                  ({courseMaterials.length} document{courseMaterials.length > 1 ? "s" : ""})
+                  ({cohortMaterials.length} document{cohortMaterials.length > 1 ? "s" : ""})
                 </span>
               </div>
 
               {/* Materials Grid */}
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {courseMaterials.map((material) => (
+                {cohortMaterials.map((material) => (
                   <div
                     key={material.id}
                     className="card-elevated p-4 hover:border-primary-500/30 transition-all duration-300"
@@ -196,10 +203,13 @@ export default function EmployeeMaterialsPage() {
                         <p className="text-sm text-muted-foreground truncate" title={material.file_name}>
                           {material.file_name}
                         </p>
+                        <p className="text-xs text-muted-foreground mt-1">
+                          Formation: {material.course_title}
+                        </p>
                         <div className="flex items-center gap-2 mt-2 text-xs text-muted-foreground">
                           <span>{formatFileSize(material.file_size)}</span>
                           <span>•</span>
-                          <span>{formatDate(material.created_at || material.uploaded_at)}</span>
+                          <span>{formatDate(material.created_at)}</span>
                         </div>
                       </div>
                     </div>
@@ -219,7 +229,7 @@ export default function EmployeeMaterialsPage() {
                 ))}
               </div>
             </div>
-          ))}
+          );})}
         </div>
       )}
     </>

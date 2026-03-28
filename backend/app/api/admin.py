@@ -53,10 +53,20 @@ def require_staff_or_admin(user: User = Depends(get_current_user)) -> User:
     return user
 
 
+def require_verification_reviewer(user: User = Depends(get_current_user)) -> User:
+    """Dependency to ensure user can review signup verifications."""
+    if user.role not in [UserRole.COORDINATOR, UserRole.STAFF, UserRole.ADMIN]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Coordinator, staff or admin access required"
+        )
+    return user
+
+
 @admin_router.get("/pending-verifications", response_model=PendingUsersListResponse)
 async def get_pending_verifications(
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(require_staff_or_admin)
+    current_user: User = Depends(require_verification_reviewer)
 ):
     """
     Get all users with pending account verification.
@@ -107,7 +117,7 @@ async def get_pending_verifications(
 async def approve_user(
     user_id: int,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(require_staff_or_admin)
+    current_user: User = Depends(require_verification_reviewer)
 ):
     """
     Approve a pending user account.
@@ -163,7 +173,7 @@ async def reject_user(
     user_id: int,
     reason: Optional[str] = None,
     session: AsyncSession = Depends(get_session),
-    current_user: User = Depends(require_staff_or_admin)
+    current_user: User = Depends(require_verification_reviewer)
 ):
     """
     Reject a pending user account.

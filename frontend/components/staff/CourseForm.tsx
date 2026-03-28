@@ -5,25 +5,20 @@ import { useRouter } from "next/navigation";
 import {
   Upload,
   X,
-  Clock,
-  Users,
   FileText,
-  Tag,
   Loader2,
-  AlertTriangle,
   Building2,
   GraduationCap,
   Plus,
   Trash2,
   CheckCircle2,
 } from "lucide-react";
-import { createCourse, updateCourse, getCourseEditability, getDepartments, getProfessors } from "@/lib/courses";
+import { createCourse, updateCourse, getProfessors } from "@/lib/courses";
 import { getImageUrl } from "@/lib/config";
 import type { 
   Course, 
   CourseCreateData, 
   CourseType, 
-  CourseEditability,
   Department,
   ProfessorListItem 
 } from "@/types/course";
@@ -32,9 +27,10 @@ import { DEPARTMENT_DISPLAY_NAMES } from "@/types/course";
 interface CourseFormProps {
   course?: Course;
   mode: "create" | "edit";
+  onSuccessRedirect?: string;
 }
 
-export function CourseForm({ course, mode }: CourseFormProps) {
+export function CourseForm({ course, mode, onSuccessRedirect = "/staff/courses" }: CourseFormProps) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -59,8 +55,6 @@ export function CourseForm({ course, mode }: CourseFormProps) {
   );
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
-  const [editability, setEditability] = useState<CourseEditability | null>(null);
-  const [editabilityLoading, setEditabilityLoading] = useState(false);
   
   // New states for departments and professors
   const [professors, setProfessors] = useState<ProfessorListItem[]>([]);
@@ -83,24 +77,6 @@ export function CourseForm({ course, mode }: CourseFormProps) {
     }
     fetchProfessors();
   }, [formData.department]);
-
-  // Fetch editability status when editing a course
-  useEffect(() => {
-    async function fetchEditability() {
-      if (mode === "edit" && course) {
-        try {
-          setEditabilityLoading(true);
-          const data = await getCourseEditability(course.id);
-          setEditability(data);
-        } catch (err) {
-          console.error("Failed to fetch editability:", err);
-        } finally {
-          setEditabilityLoading(false);
-        }
-      }
-    }
-    fetchEditability();
-  }, [mode, course]);
 
   const handleInputChange = (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
@@ -222,10 +198,6 @@ export function CourseForm({ course, mode }: CourseFormProps) {
       newErrors.department = "Le département est requis";
     }
 
-    if (!formData.max_seats || formData.max_seats < 1) {
-      newErrors.max_seats = "Au moins 1 place est requise";
-    }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
@@ -246,7 +218,7 @@ export function CourseForm({ course, mode }: CourseFormProps) {
         await updateCourse(course.id, formData, imageFile || undefined);
       }
 
-      router.push("/staff/courses");
+      router.push(onSuccessRedirect);
       router.refresh();
     } catch (err) {
       console.error("Failed to save course:", err);
@@ -342,14 +314,14 @@ export function CourseForm({ course, mode }: CourseFormProps) {
               Titre *
             </label>
             <div className="relative">
-              <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+              <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <input
                 type="text"
                 id="title"
                 name="title"
                 value={formData.title}
                 onChange={handleInputChange}
-                className={`form-input pl-10 ${
+                className={`form-input h-11 pl-10 ${
                   errors.title
                     ? "border-red-500 focus:ring-red-500/50"
                     : ""
@@ -390,45 +362,31 @@ export function CourseForm({ course, mode }: CourseFormProps) {
             >
               Description Complète *
             </label>
+            <p className="text-xs text-muted-foreground mb-2">
+              {mode === "edit"
+                ? "Modifiez ici les informations détaillées de la formation."
+                : "Renseignez ici les informations détaillées de la formation."}
+            </p>
             <textarea
               id="description"
               name="description"
               value={formData.description}
               onChange={handleInputChange}
               rows={6}
-              className={`form-input resize-none ${
+              className={`form-input min-h-[150px] resize-y ${
                 errors.description
                   ? "border-red-500 focus:ring-red-500/50"
                   : ""
               }`}
-              placeholder="Description détaillée de la formation..."
+              placeholder={
+                mode === "edit"
+                  ? "Mettez a jour la description detaillee de la formation..."
+                  : "Description detaillee de la formation..."
+              }
             />
             {errors.description && (
               <p className="text-sm text-red-500 mt-1">{errors.description}</p>
             )}
-          </div>
-
-          {/* Type */}
-          <div>
-            <label
-              htmlFor="type"
-              className="block text-sm font-medium text-muted-foreground mb-2"
-            >
-              Type de Formation
-            </label>
-            <div className="relative">
-              <Tag className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
-              <select
-                id="type"
-                name="type"
-                value={formData.type}
-                onChange={handleInputChange}
-                className="form-input pl-10 appearance-none"
-              >
-                <option value="public">Formation Publique</option>
-                <option value="private">Formation Privée (Entreprise)</option>
-              </select>
-            </div>
           </div>
 
           {/* Department - Required */}
@@ -440,13 +398,13 @@ export function CourseForm({ course, mode }: CourseFormProps) {
               Département *
             </label>
             <div className="relative">
-              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
+              <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
               <select
                 id="department"
                 name="department"
                 value={formData.department || ""}
                 onChange={handleDepartmentChange}
-                className={`form-input pl-10 appearance-none ${
+                className={`form-input h-11 pl-10 appearance-none ${
                   errors.department ? "border-red-500 focus:ring-red-500/50" : ""
                 }`}
               >
@@ -472,14 +430,14 @@ export function CourseForm({ course, mode }: CourseFormProps) {
               Professeur
             </label>
             <div className="relative">
-              <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none z-10" />
+              <GraduationCap className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none z-10" />
               <select
                 id="professor_id"
                 name="professor_id"
                 value={formData.professor_id || ""}
                 onChange={handleProfessorChange}
                 disabled={professorsLoading || !formData.department}
-                className={`form-input pl-10 appearance-none ${
+                className={`form-input h-11 pl-10 appearance-none ${
                   !formData.department ? "opacity-50 cursor-not-allowed" : ""
                 }`}
               >
@@ -572,99 +530,6 @@ export function CourseForm({ course, mode }: CourseFormProps) {
           >
             <Plus className="w-5 h-5" />
           </button>
-        </div>
-      </div>
-
-      {/* Capacity */}
-      <div className="card-elevated p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-4">
-          Capacité
-        </h2>
-
-        {/* Show warning if editing is restricted */}
-        {mode === "edit" && editability && editability.has_bookings && (
-          <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 rounded-xl">
-            <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-amber-500 shrink-0 mt-0.5" />
-              <div>
-                <p className="text-sm font-medium text-amber-700 dark:text-amber-400">
-                  Modification restreinte
-                </p>
-                <p className="text-xs text-amber-600 dark:text-amber-500 mt-1">
-                  {editability.reason || "Impossible de modifier les places après des réservations."}
-                </p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        <div className="max-w-md">
-          {/* Max Seats */}
-          <div>
-            <label
-              htmlFor="max_seats"
-              className="block text-sm font-medium text-muted-foreground mb-2"
-            >
-              Places Disponibles *
-            </label>
-            <div className="relative">
-              <Users className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground pointer-events-none" />
-              <input
-                type="number"
-                id="max_seats"
-                name="max_seats"
-                value={formData.max_seats}
-                onChange={handleInputChange}
-                min="1"
-                disabled={mode === "edit" && editability?.has_bookings}
-                className={`form-input pl-10 ${
-                  errors.max_seats
-                    ? "border-red-500 focus:ring-red-500/50"
-                    : ""
-                } ${
-                  mode === "edit" && editability?.has_bookings
-                    ? "opacity-50 cursor-not-allowed"
-                    : ""
-                }`}
-                placeholder="20"
-              />
-            </div>
-            {errors.max_seats && (
-              <p className="text-sm text-red-500 mt-1">{errors.max_seats}</p>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* Duration */}
-      <div className="card-elevated p-6">
-        <h2 className="text-lg font-semibold text-foreground mb-4">
-          Durée de la Formation
-        </h2>
-
-        <div className="max-w-md">
-          <label
-            htmlFor="duration_hours"
-            className="block text-sm font-medium text-muted-foreground mb-2"
-          >
-            Durée totale (heures)
-          </label>
-          <div className="relative">
-            <Clock className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
-            <input
-              type="number"
-              id="duration_hours"
-              name="duration_hours"
-              value={formData.duration_hours || ""}
-              onChange={handleInputChange}
-              min="1"
-              className="form-input pl-10"
-              placeholder="24"
-            />
-          </div>
-          <p className="text-sm text-muted-foreground mt-2">
-            Les dates et horaires seront définis lors de la création des sessions de disponibilité.
-          </p>
         </div>
       </div>
 

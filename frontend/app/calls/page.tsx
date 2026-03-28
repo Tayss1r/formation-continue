@@ -17,15 +17,10 @@ import { DEPARTMENT_DISPLAY_NAMES } from "@/types/call";
 
 const departments: Department[] = [
   'informatique',
-  'mathematiques',
-  'physique',
-  'biologie',
-  'chimie',
-  'lettres',
-  'economie',
-  'droit',
-  'medecine',
-  'general',
+  'mecanique',
+  'electrique',
+  'civil',
+  'gestion',
 ];
 
 export default function CallsPage() {

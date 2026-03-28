@@ -14,34 +14,24 @@ export type ApplicationStatus =
   | 'rejected' 
   | 'withdrawn';
 
-export type DocumentReviewStatus = 'pending' | 'approved' | 'rejected' | 'requires_resubmission';
+export type DocumentReviewStatus = 'pending' | 'approved' | 'rejected' | 'revision_required';
 
-export type EmployeeSubmissionStatus = 'pending' | 'submitted' | 'approved' | 'rejected' | 'withdrawn';
+export type EmployeeSubmissionStatus = 'pending' | 'submitted' | 'under_review' | 'approved' | 'rejected';
 
 export type Department = 
   | 'informatique' 
-  | 'mathematiques' 
-  | 'physique' 
-  | 'biologie' 
-  | 'chimie' 
-  | 'lettres' 
-  | 'economie' 
-  | 'droit' 
-  | 'medecine' 
-  | 'general';
+  | 'mecanique'
+  | 'electrique'
+  | 'civil'
+  | 'gestion';
 
 // Department display names
 export const DEPARTMENT_DISPLAY_NAMES: Record<Department, string> = {
-  informatique: 'Informatique',
-  mathematiques: 'Mathématiques',
-  physique: 'Physique',
-  biologie: 'Biologie',
-  chimie: 'Chimie',
-  lettres: 'Lettres et Sciences Humaines',
-  economie: 'Sciences Économiques',
-  droit: 'Droit',
-  medecine: 'Médecine',
-  general: 'Formation Générale',
+  informatique: "Technologie de l'informatique",
+  mecanique: 'Génie mécanique',
+  electrique: 'Génie électrique',
+  civil: 'Génie civil',
+  gestion: 'Sciences Économiques et Sciences de Gestion',
 };
 
 // Document specification

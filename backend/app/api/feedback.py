@@ -13,7 +13,7 @@ from ..db.database import get_session
 from ..db.models import (
     User, UserRole, CourseFeedback, Course, 
     EmployeeProfile, EmployeeSubmission, CompanyApplication, 
-    CallForApplicants, EmployeeSubmissionStatus, ApplicationStatus
+    Cohort, EmployeeSubmissionStatus, ApplicationStatus
 )
 from ..dependencies import get_current_user
 from ..schemas.feedback_schema import (
@@ -62,13 +62,13 @@ async def check_employee_enrolled(
     result = await session.execute(
         select(EmployeeSubmission)
         .join(CompanyApplication, EmployeeSubmission.company_application_id == CompanyApplication.id)
-        .join(CallForApplicants, CompanyApplication.call_id == CallForApplicants.id)
+        .join(Cohort, Cohort.call_id == CompanyApplication.call_id)
         .where(
             and_(
                 EmployeeSubmission.employee_id == employee_id,
                 EmployeeSubmission.status == EmployeeSubmissionStatus.APPROVED,
                 CompanyApplication.status == ApplicationStatus.APPROVED,
-                CallForApplicants.course_id == course_id
+                Cohort.course_id == course_id
             )
         )
     )

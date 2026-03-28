@@ -7,16 +7,18 @@ import {
   LayoutDashboard,
   FileText,
   Plus,
+  BookOpen,
   Menu,
   X,
-  ChevronLeft,
   ClipboardList,
   Users,
   CheckCircle,
   Activity,
   ChevronRight,
-  Building2,
+  CalendarClock,
+  ShieldCheck,
 } from "lucide-react";
+import { AppLogo } from "@/components/ui/AppLogo";
 
 const navItems = [
   {
@@ -35,6 +37,11 @@ const navItems = [
     icon: Plus,
   },
   {
+    label: "Créer / Modifier Formation",
+    href: "/coordinator/courses",
+    icon: BookOpen,
+  },
+  {
     label: "Candidatures",
     href: "/coordinator/applications",
     icon: ClipboardList,
@@ -45,9 +52,19 @@ const navItems = [
     icon: Users,
   },
   {
+    label: "Inscriptions à valider",
+    href: "/coordinator/verifications",
+    icon: ShieldCheck,
+  },
+  {
     label: "Résultats",
     href: "/coordinator/results",
     icon: CheckCircle,
+  },
+  {
+    label: "Cohorts",
+    href: "/coordinator/cohorts",
+    icon: CalendarClock,
   },
   {
     label: "Historique",
@@ -73,11 +90,9 @@ export function CoordinatorSidebar() {
       <div className="lg:hidden fixed top-0 left-0 right-0 z-50 bg-card border-b border-border px-4 py-3">
         <div className="flex items-center justify-between">
           <Link href="/coordinator" className="flex items-center gap-2">
-            <div className="w-8 h-8 rounded-lg gradient-primary flex items-center justify-center">
-              <Building2 className="w-5 h-5 text-white" />
-            </div>
+            <AppLogo size="sm" alt="Forminy logo" />
             <span className="text-lg font-bold text-foreground">
-              Coordinateur
+              Forminy
             </span>
           </Link>
           <button
@@ -103,36 +118,23 @@ export function CoordinatorSidebar() {
 
       {/* Sidebar */}
       <aside
-        className={`fixed inset-y-0 left-0 z-50 w-64 bg-card border-r border-border transform transition-transform duration-300 lg:translate-x-0 ${
+        className={`fixed inset-y-0 left-0 z-50 w-64 bg-card transform transition-transform duration-300 lg:translate-x-0 ${
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         }`}
       >
         <div className="flex flex-col h-full">
           {/* Logo */}
-          <div className="p-6 border-b border-border">
+          <div className="p-6">
             <Link href="/coordinator" className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl gradient-primary flex items-center justify-center shadow-primary">
-                <Building2 className="w-6 h-6 text-white" />
-              </div>
+              <AppLogo alt="Forminy logo" />
               <div>
                 <span className="text-lg font-bold text-foreground block">
-                  Formation
+                  Forminy
                 </span>
                 <span className="text-xs text-muted-foreground">
                   Espace Coordinateur
                 </span>
               </div>
-            </Link>
-          </div>
-
-          {/* Back to Site */}
-          <div className="px-4 py-3 border-b border-border">
-            <Link
-              href="/"
-              className="flex items-center gap-2 text-sm text-muted-foreground hover:text-primary-600 dark:hover:text-primary-400 transition-colors"
-            >
-              <ChevronLeft className="w-4 h-4" />
-              Retour au site
             </Link>
           </div>
 

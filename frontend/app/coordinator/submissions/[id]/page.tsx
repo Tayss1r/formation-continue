@@ -53,6 +53,25 @@ export default function SubmissionDetailPage() {
   } | null>(null);
   const [isDecisionLoading, setIsDecisionLoading] = useState(false);
 
+  function getErrorMessage(err: unknown): string {
+    if (err && typeof err === "object") {
+      const error = err as { message?: string; detail?: string | { msg?: string }[] };
+      if (typeof error.message === "string" && error.message.trim()) {
+        return error.message;
+      }
+      if (typeof error.detail === "string" && error.detail.trim()) {
+        return error.detail;
+      }
+      if (Array.isArray(error.detail)) {
+        const first = error.detail[0];
+        if (first?.msg) {
+          return first.msg;
+        }
+      }
+    }
+    return "Erreur lors de la soumission de la décision";
+  }
+
   useEffect(() => {
     fetchSubmission();
   }, [submissionId]);
@@ -77,8 +96,8 @@ export default function SubmissionDetailPage() {
     setIsReviewLoading(true);
     try {
       await reviewSubmissionDocument(submissionId, reviewingDoc.id, {
-        status: reviewingDoc.action === 'approve' ? 'approved' : reviewingDoc.action === 'reject' ? 'rejected' : 'requires_resubmission',
-        rejection_reason: reviewingDoc.notes || undefined,
+        review_status: reviewingDoc.action === 'approve' ? 'approved' : reviewingDoc.action === 'reject' ? 'rejected' : 'revision_required',
+        review_notes: reviewingDoc.notes || undefined,
       });
       await fetchSubmission();
       setReviewingDoc(null);
@@ -92,19 +111,24 @@ export default function SubmissionDetailPage() {
 
   async function handleFinalDecision() {
     if (!finalDecision) return;
+
+    if (finalDecision.type === "reject" && finalDecision.notes.trim().length < 10) {
+      setError("Le motif de rejet doit contenir au moins 10 caractères.");
+      return;
+    }
     
     setIsDecisionLoading(true);
     try {
       if (finalDecision.type === 'approve') {
-        await approveSubmission(submissionId, { notes: finalDecision.notes || undefined });
+        await approveSubmission(submissionId, { review_notes: finalDecision.notes || undefined });
       } else {
-        await rejectSubmission(submissionId, { notes: finalDecision.notes || undefined });
+        await rejectSubmission(submissionId, { review_notes: finalDecision.notes || undefined });
       }
       await fetchSubmission();
       setFinalDecision(null);
     } catch (err) {
       console.error("Error submitting decision:", err);
-      setError("Erreur lors de la soumission de la décision");
+      setError(getErrorMessage(err));
     } finally {
       setIsDecisionLoading(false);
     }
@@ -114,7 +138,7 @@ export default function SubmissionDetailPage() {
     switch (status) {
       case 'approved': return 'text-green-600 bg-green-100 dark:bg-green-900/30';
       case 'rejected': return 'text-red-600 bg-red-100 dark:bg-red-900/30';
-      case 'requires_resubmission': return 'text-amber-600 bg-amber-100 dark:bg-amber-900/30';
+      case 'revision_required': return 'text-amber-600 bg-amber-100 dark:bg-amber-900/30';
       default: return 'text-blue-600 bg-blue-100 dark:bg-blue-900/30';
     }
   }
@@ -123,7 +147,7 @@ export default function SubmissionDetailPage() {
     switch (status) {
       case 'approved': return 'Approuvé';
       case 'rejected': return 'Rejeté';
-      case 'requires_resubmission': return 'Révision demandée';
+      case 'revision_required': return 'Révision demandée';
       default: return 'En attente';
     }
   }
@@ -377,7 +401,7 @@ export default function SubmissionDetailPage() {
                             <Download className="w-4 h-4" />
                           </a>
                         )}
-                        {submission.status === 'submitted' && (
+                        {['submitted', 'under_review'].includes(submission.status) && doc.review_status === 'pending' && (
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => setReviewingDoc({
@@ -385,6 +409,7 @@ export default function SubmissionDetailPage() {
                                 action: 'approve',
                                 notes: '',
                               })}
+                              disabled={isReviewLoading || isDecisionLoading}
                               className="p-2 text-green-600 hover:bg-green-100 dark:hover:bg-green-900/30 rounded-lg transition-colors"
                               title="Approuver"
                             >
@@ -396,6 +421,7 @@ export default function SubmissionDetailPage() {
                                 action: 'reject',
                                 notes: '',
                               })}
+                              disabled={isReviewLoading || isDecisionLoading}
                               className="p-2 text-red-600 hover:bg-red-100 dark:hover:bg-red-900/30 rounded-lg transition-colors"
                               title="Rejeter"
                             >
@@ -407,6 +433,7 @@ export default function SubmissionDetailPage() {
                                 action: 'revision',
                                 notes: '',
                               })}
+                              disabled={isReviewLoading || isDecisionLoading}
                               className="p-2 text-amber-600 hover:bg-amber-100 dark:hover:bg-amber-900/30 rounded-lg transition-colors"
                               title="Demander révision"
                             >
@@ -435,7 +462,7 @@ export default function SubmissionDetailPage() {
                 <StatusBadge status={submission.status} type="submission" />
               </div>
               
-              {submission.status === 'submitted' && (
+              {['submitted', 'under_review'].includes(submission.status) && (
                 <>
                   <div className="pt-4 border-t border-border">
                     <p className="text-sm text-muted-foreground mb-3">
@@ -448,6 +475,7 @@ export default function SubmissionDetailPage() {
                     <div className="space-y-3">
                       <button
                         onClick={() => setFinalDecision({ type: 'approve', notes: '' })}
+                        disabled={isDecisionLoading || isReviewLoading}
                         className="w-full btn-primary flex items-center justify-center gap-2"
                       >
                         <CheckCircle className="w-4 h-4" />
@@ -455,6 +483,7 @@ export default function SubmissionDetailPage() {
                       </button>
                       <button
                         onClick={() => setFinalDecision({ type: 'reject', notes: '' })}
+                        disabled={isDecisionLoading || isReviewLoading}
                         className="w-full px-4 py-2 rounded-lg bg-red-600 hover:bg-red-700 text-white font-medium transition-colors flex items-center justify-center gap-2"
                       >
                         <XCircle className="w-4 h-4" />
@@ -608,7 +637,7 @@ export default function SubmissionDetailPage() {
             
             <div className="mb-6">
               <label className="block text-sm font-medium text-foreground mb-1.5">
-                Notes (optionnel)
+                Notes {finalDecision.type === 'reject' ? '(minimum 10 caractères)' : '(optionnel)'}
               </label>
               <textarea
                 value={finalDecision.notes}
@@ -629,7 +658,7 @@ export default function SubmissionDetailPage() {
               </button>
               <button
                 onClick={handleFinalDecision}
-                disabled={isDecisionLoading}
+                disabled={isDecisionLoading || (finalDecision.type === 'reject' && finalDecision.notes.trim().length < 10)}
                 className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors disabled:opacity-50 flex items-center gap-2 ${
                   finalDecision.type === 'approve'
                     ? 'bg-green-600 hover:bg-green-700 text-white'

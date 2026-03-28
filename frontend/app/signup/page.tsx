@@ -1,7 +1,7 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import {
   Mail,
@@ -25,6 +25,11 @@ import {
 import AuthLayout from "@/components/auth/AuthLayout";
 import FormInput, { FormTextarea, FileUpload } from "@/components/ui/FormInput";
 import { apiClient } from "@/lib/api";
+import {
+  validateEmployeeInvitation,
+  registerEmployeeViaInvitation,
+} from "@/lib/invitations";
+import type { EmployeeInvitationInfo } from "@/types/invitation";
 
 type UserRole = "company" | "professor" | "employee";
 
@@ -95,15 +100,60 @@ const roleOptions = [
   },
 ];
 
+const professorSpecializationOptions = [
+  "Génie civil",
+  "Technologie de l'informatique",
+  "Génie mécanique",
+  "Génie électrique",
+  "Sciences Économiques et Sciences de Gestion",
+];
+
 export default function SignupPage() {
   const router = useRouter();
-  const [step, setStep] = useState(1);
+  const searchParams = useSearchParams();
+  const invitationToken = searchParams.get("token") || "";
+  const isInvitationMode = !!invitationToken;
+
+  const [step, setStep] = useState(isInvitationMode ? 2 : 1);
   const [data, setData] = useState<SignupData>(initialData);
   const [isLoading, setIsLoading] = useState(false);
+  const [isInvitationLoading, setIsInvitationLoading] = useState(isInvitationMode);
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [invitationInfo, setInvitationInfo] = useState<EmployeeInvitationInfo | null>(null);
 
   const selectedRole = roleOptions.find((r) => r.value === data.role);
+
+  useEffect(() => {
+    if (!isInvitationMode) return;
+
+    const loadInvitation = async () => {
+      setIsInvitationLoading(true);
+      setError("");
+      try {
+        const info = await validateEmployeeInvitation(invitationToken);
+        if (info.is_used) {
+          setError("Cette invitation a déjà été utilisée. Veuillez vous connecter.");
+          return;
+        }
+
+        setInvitationInfo(info);
+        setData((prev) => ({
+          ...prev,
+          role: "employee",
+          fullname: info.employee_name || prev.fullname,
+          email: info.employee_email || prev.email,
+        }));
+        setStep(2);
+      } catch (err: any) {
+        setError(err?.message || "Invitation invalide ou expirée");
+      } finally {
+        setIsInvitationLoading(false);
+      }
+    };
+
+    loadInvitation();
+  }, [isInvitationMode, invitationToken]);
 
   const updateField = (field: keyof SignupData, value: string | File | null) => {
     setData((prev) => ({ ...prev, [field]: value }));
@@ -164,6 +214,17 @@ export default function SignupPage() {
     setError("");
 
     try {
+      if (isInvitationMode) {
+        await registerEmployeeViaInvitation({
+          token: invitationToken,
+          fullname: data.fullname,
+          email: data.email,
+          password: data.password,
+        });
+        router.push(`/login?email=${encodeURIComponent(data.email)}`);
+        return;
+      }
+
       // Step 1: Create user account (JSON request)
       const signupData: Record<string, string> = {
         role: data.role,
@@ -225,10 +286,28 @@ export default function SignupPage() {
 
   return (
     <AuthLayout
-      title={step === 1 ? "Créer un compte" : `Inscription ${selectedRole?.label}`}
+      title={isInvitationMode ? "Inscription Employé" : step === 1 ? "Créer un compte" : `Inscription ${selectedRole?.label}`}
       subtitle={step === 1 ? "Choisissez votre type de compte" : "Remplissez vos informations"}
     >
+      {isInvitationLoading && (
+        <div className="mb-6 p-4 rounded-xl border border-border bg-muted/40 text-sm text-muted-foreground">
+          Vérification de votre invitation...
+        </div>
+      )}
+
+      {isInvitationMode && invitationInfo && !isInvitationLoading && (
+        <div className="mb-6 p-4 rounded-xl border border-primary-200 dark:border-primary-800 bg-primary-50 dark:bg-primary-900/20 text-sm">
+          <p className="text-primary-700 dark:text-primary-300">
+            Invitation de <strong>{invitationInfo.company_name}</strong> pour l&apos;appel <strong>{invitationInfo.call_title}</strong> ({invitationInfo.call_reference}).
+          </p>
+          <p className="text-primary-700 dark:text-primary-300 mt-2">
+            Après examen, les résultats d&apos;admission sont publiés dans les actualités avec un fichier téléchargeable.
+          </p>
+        </div>
+      )}
+
       {/* Progress Steps */}
+      {!isInvitationMode && (
       <div className="flex items-center justify-center gap-3 mb-6">
         <div
           className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-semibold transition-all ${
@@ -254,6 +333,7 @@ export default function SignupPage() {
           2
         </div>
       </div>
+      )}
 
       {/* Error Message */}
       {error && (
@@ -263,8 +343,17 @@ export default function SignupPage() {
         </div>
       )}
 
+      {isInvitationMode && !isInvitationLoading && !invitationInfo && (
+        <Link
+          href="/login"
+          className="btn-secondary block w-full h-12 flex items-center justify-center text-center"
+        >
+          Se connecter
+        </Link>
+      )}
+
       {/* Step 1: Role Selection */}
-      {step === 1 && (
+      {!isInvitationMode && step === 1 && (
         <div className="space-y-4 animate-in fade-in duration-300">
           {roleOptions.map((role) => (
             <button
@@ -322,7 +411,7 @@ export default function SignupPage() {
       )}
 
       {/* Step 2: Form Fields */}
-      {step === 2 && (
+      {step === 2 && (!isInvitationMode || !!invitationInfo) && (
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -331,14 +420,16 @@ export default function SignupPage() {
           className="space-y-5 animate-in fade-in duration-300"
         >
           {/* Back Button */}
-          <button
-            type="button"
-            onClick={goBack}
-            className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm transition-colors mb-2"
-          >
-            <ArrowLeft className="w-4 h-4" />
-            Retour au choix du rôle
-          </button>
+          {!isInvitationMode && (
+            <button
+              type="button"
+              onClick={goBack}
+              className="flex items-center gap-2 text-muted-foreground hover:text-foreground text-sm transition-colors mb-2"
+            >
+              <ArrowLeft className="w-4 h-4" />
+              Retour au choix du rôle
+            </button>
+          )}
 
           {/* Verification Notice for Company/Professor */}
           {selectedRole?.requiresDocument && (
@@ -359,7 +450,7 @@ export default function SignupPage() {
           )}
 
           {/* Employee info message */}
-          {data.role === "employee" && (
+          {data.role === "employee" && !isInvitationMode && (
             <div className="p-4 bg-primary-50 dark:bg-primary-900/30 rounded-xl border border-primary-200 dark:border-primary-800">
               <p className="text-sm text-primary-700 dark:text-primary-300">
                 <strong>Note :</strong> Après votre inscription, vous pourrez utiliser le code d&apos;inscription 
@@ -452,15 +543,41 @@ export default function SignupPage() {
 
           {/* Professor-specific fields */}
           {data.role === "professor" && (
-            <FormInput
-              id="specialization"
-              label="Spécialisation *"
-              icon={BookOpen}
-              value={data.specialization}
-              onChange={(e) => updateField("specialization", e.target.value)}
-              placeholder="Intelligence Artificielle, Finance, Marketing..."
-              error={fieldErrors.specialization}
-            />
+            <div className="space-y-1.5">
+              <label htmlFor="specialization" className="block text-sm font-medium text-foreground">
+                Spécialisation *
+              </label>
+              <div className="relative">
+                <div className="absolute left-0 top-0 bottom-0 w-11 flex items-center justify-center pointer-events-none">
+                  <BookOpen className="w-[18px] h-[18px] text-muted-foreground" />
+                </div>
+                <select
+                  id="specialization"
+                  value={data.specialization}
+                  onChange={(e) => updateField("specialization", e.target.value)}
+                  className={`
+                    w-full h-12 pl-11 pr-4
+                    bg-card border rounded-xl text-[15px] text-foreground
+                    transition-all duration-200
+                    focus:outline-none focus:ring-2 focus:ring-primary-500/20 focus:border-primary-500
+                    ${fieldErrors.specialization
+                      ? "border-red-500 focus:border-red-500 focus:ring-red-500/20"
+                      : "border-border hover:border-primary-300 dark:hover:border-primary-700"
+                    }
+                  `}
+                >
+                  <option value="">Sélectionner une spécialisation</option>
+                  {professorSpecializationOptions.map((option) => (
+                    <option key={option} value={option}>
+                      {option}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              {fieldErrors.specialization && (
+                <p className="text-sm text-red-500 mt-1">{fieldErrors.specialization}</p>
+              )}
+            </div>
           )}
 
           {/* Document Upload for Company and Professor */}

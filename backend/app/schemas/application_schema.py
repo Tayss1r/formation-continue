@@ -219,6 +219,28 @@ class CompanyApplicationListResponse(BaseModel):
     total: int
 
 
+class CompanyAttendanceEmployeeOut(BaseModel):
+    """Attendance summary line for one employee in company dashboard."""
+    employee_id: int
+    employee_name: str
+    employee_email: str
+    company_name: str
+    present_count: int
+    late_count: int
+    absent_count: int
+    total_sessions_marked: int
+    presence_percentage: float
+    course_titles: List[str] = Field(default_factory=list)
+    cohort_titles: List[str] = Field(default_factory=list)
+    session_titles: List[str] = Field(default_factory=list)
+
+
+class CompanyAttendanceSummaryResponse(BaseModel):
+    """Company-level attendance summary across admitted employees."""
+    attendance: List[CompanyAttendanceEmployeeOut]
+    total: int
+
+
 # =============================================================================
 # ACTION RESPONSES
 # =============================================================================

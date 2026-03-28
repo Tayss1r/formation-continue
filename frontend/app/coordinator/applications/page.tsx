@@ -35,6 +35,7 @@ const statusOptions = [
 interface ApplicationWithCallInfo extends Application {
   call_title?: string;
   call_reference?: string;
+  documents_count?: number;
 }
 
 export default function AllApplicationsPage() {
@@ -289,7 +290,7 @@ export default function AllApplicationsPage() {
                         <div className="inline-flex flex-col items-center gap-1 text-sm text-muted-foreground">
                           <span className="inline-flex items-center gap-1">
                             <FileText className="w-4 h-4" />
-                            {app.documents?.length || 0}
+                            {app.documents_count ?? app.documents?.length ?? 0}
                           </span>
                           {app.documents?.[0]?.file_path && (
                             <a
@@ -379,7 +380,7 @@ export default function AllApplicationsPage() {
                   <div className="flex items-center gap-4 text-sm text-muted-foreground">
                     <span className="flex items-center gap-1">
                       <FileText className="w-4 h-4" />
-                      {app.documents?.length || 0} doc(s)
+                      {app.documents_count ?? app.documents?.length ?? 0} doc(s)
                     </span>
                     <span className="flex items-center gap-1">
                       <Calendar className="w-4 h-4" />

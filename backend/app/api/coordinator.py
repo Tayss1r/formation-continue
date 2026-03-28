@@ -4,7 +4,7 @@ API endpoints for Coordinator Dashboard.
 
 from datetime import datetime, timezone, timedelta
 from typing import Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func, cast, Integer
 
@@ -28,6 +28,16 @@ from ..schemas.coordinator_schema import (
     ApplicationStats,
     SubmissionStats,
 )
+from ..schemas.cohort_schema import (
+    CohortCreate,
+    CohortListResponse,
+    CohortOut,
+    CohortFormOptionsResponse,
+    CohortProfessorOut,
+    CohortProfessorAssignIn,
+    CohortAssignmentResponse,
+)
+from ..services.cohort_service import CohortService
 
 coordinator_router = APIRouter()
 
@@ -479,4 +489,133 @@ async def get_my_calls(
     return {
         'calls': result,
         'total': total,
+    }
+
+
+@coordinator_router.get("/cohorts", response_model=CohortListResponse)
+async def list_cohorts(
+    current_user: User = Depends(require_coordinator),
+    session: AsyncSession = Depends(get_session)
+):
+    """List cohorts visible to the current coordinator."""
+    cohorts = await CohortService.list_cohorts_for_coordinator(
+        coordinator_id=current_user.id,
+        session=session,
+        is_admin=current_user.role == UserRole.ADMIN,
+    )
+
+    payload = [CohortService.to_cohort_out_payload(cohort) for cohort in cohorts]
+    return {
+        "cohorts": payload,
+        "total": len(payload),
+    }
+
+
+@coordinator_router.get("/cohorts/form-options", response_model=CohortFormOptionsResponse)
+async def get_cohort_form_options(
+    current_user: User = Depends(require_coordinator),
+    session: AsyncSession = Depends(get_session)
+):
+    """Get calls (results published) and courses used by the cohort creation form."""
+    return await CohortService.get_form_options_for_coordinator(
+        coordinator_id=current_user.id,
+        session=session,
+        is_admin=current_user.role == UserRole.ADMIN,
+    )
+
+
+@coordinator_router.post("/cohorts", response_model=CohortOut, status_code=status.HTTP_201_CREATED)
+async def create_cohort(
+    payload: CohortCreate,
+    current_user: User = Depends(require_coordinator),
+    session: AsyncSession = Depends(get_session)
+):
+    """Create a cohort and define its training margins (dates and daily hours)."""
+    try:
+        cohort = await CohortService.create_cohort(
+            payload=payload,
+            coordinator_id=current_user.id,
+            session=session,
+            is_admin=current_user.role == UserRole.ADMIN,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+    return CohortService.to_cohort_out_payload(cohort)
+
+
+@coordinator_router.get(
+    "/cohorts/{cohort_id}/available-professors",
+    response_model=list[CohortProfessorOut],
+)
+async def list_available_professors_for_cohort(
+    cohort_id: int,
+    current_user: User = Depends(require_coordinator),
+    session: AsyncSession = Depends(get_session),
+):
+    """Get active professors to assign to a cohort."""
+    cohort = await CohortService.get_coordinator_cohort_by_id(
+        cohort_id=cohort_id,
+        coordinator_id=current_user.id,
+        session=session,
+        is_admin=current_user.role == UserRole.ADMIN,
+    )
+    if not cohort:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cohort introuvable",
+        )
+
+    professors = await CohortService.list_available_professors(session)
+    return [CohortService.to_professor_option_payload(professor) for professor in professors]
+
+
+@coordinator_router.put(
+    "/cohorts/{cohort_id}/professors",
+    response_model=CohortAssignmentResponse,
+)
+async def assign_professors_to_cohort(
+    cohort_id: int,
+    payload: CohortProfessorAssignIn,
+    current_user: User = Depends(require_coordinator),
+    session: AsyncSession = Depends(get_session),
+):
+    """Assign one or more professors to a cohort."""
+    cohort = await CohortService.get_coordinator_cohort_by_id(
+        cohort_id=cohort_id,
+        coordinator_id=current_user.id,
+        session=session,
+        is_admin=current_user.role == UserRole.ADMIN,
+    )
+    if not cohort:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Cohort introuvable",
+        )
+
+    try:
+        updated = await CohortService.assign_professors_to_cohort(
+            cohort=cohort,
+            professor_ids=payload.professor_ids,
+            assigned_by_id=current_user.id,
+            session=session,
+        )
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=str(exc),
+        )
+
+    professors = [
+        CohortService.to_professor_option_payload(professor)
+        for professor in updated.professors
+    ]
+    return {
+        "message": "Professeurs assignes au cohort",
+        "cohort_id": updated.id,
+        "assigned_professors": len(updated.professors),
+        "professors": professors,
     }

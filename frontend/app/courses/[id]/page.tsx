@@ -5,9 +5,6 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   BookOpen,
-  Clock,
-  Users,
-  Tag,
   ArrowLeft,
   FileText,
   Download,
@@ -156,18 +153,6 @@ export default function CourseDetailPage({
                 <span className="inline-flex items-center gap-1.5">
                   <Building2 className="w-4 h-4" />
                   {course.department}
-                </span>
-              )}
-              {course.duration_hours && (
-                <span className="inline-flex items-center gap-1.5">
-                  <Clock className="w-4 h-4" />
-                  {course.duration_hours}h de formation
-                </span>
-              )}
-              {course.price && (
-                <span className="inline-flex items-center gap-1.5 text-primary-600 dark:text-primary-400 font-semibold">
-                  <Tag className="w-4 h-4" />
-                  {course.price.toLocaleString()} DA
                 </span>
               )}
             </div>

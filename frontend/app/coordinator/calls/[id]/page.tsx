@@ -19,6 +19,7 @@ import {
   AlertCircle,
   MoreVertical,
   ExternalLink,
+  Loader2,
 } from "lucide-react";
 import { getCallDetails, publishCall, closeCall, startCallReview, publishCallResults, deleteCall } from "@/lib/calls";
 import { getCallApplications } from "@/lib/applications";
@@ -45,6 +46,7 @@ export default function CallDetailsPage() {
     title: string;
     message: string;
     variant: 'danger' | 'primary' | 'warning';
+    actionType: 'publish' | 'close' | 'publish_results' | 'start_review' | 'delete';
     action: () => Promise<void>;
   } | null>(null);
 
@@ -85,9 +87,10 @@ export default function CallDetailsPage() {
       title: "Publier l'appel",
       message: "L'appel sera visible publiquement et les entreprises pourront soumettre leurs candidatures.",
       variant: 'primary',
+      actionType: 'publish',
       action: async () => {
         await publishCall(callId);
-        fetchData();
+        await fetchData();
       },
     });
   }
@@ -98,9 +101,10 @@ export default function CallDetailsPage() {
       title: "Fermer les candidatures",
       message: "Les entreprises ne pourront plus soumettre de candidatures pour cet appel.",
       variant: 'warning',
+      actionType: 'close',
       action: async () => {
         await closeCall(callId);
-        fetchData();
+        await fetchData();
       },
     });
   }
@@ -111,9 +115,10 @@ export default function CallDetailsPage() {
       title: "Publier les résultats",
       message: "Les résultats seront publiés et visibles sur la page d'accueil.",
       variant: 'primary',
+      actionType: 'publish_results',
       action: async () => {
         await publishCallResults(callId);
-        fetchData();
+        await fetchData();
       },
     });
   }
@@ -124,9 +129,10 @@ export default function CallDetailsPage() {
       title: "Démarrer l'examen",
       message: "L'appel passera en mode examen. Vous pourrez ensuite examiner les candidatures et publier les résultats.",
       variant: 'primary',
+      actionType: 'start_review',
       action: async () => {
         await startCallReview(callId);
-        fetchData();
+        await fetchData();
       },
     });
   }
@@ -137,6 +143,7 @@ export default function CallDetailsPage() {
       title: "Supprimer l'appel",
       message: "Êtes-vous sûr de vouloir supprimer cet appel ? Cette action est irréversible.",
       variant: 'danger',
+      actionType: 'delete',
       action: async () => {
         await deleteCall(callId);
         router.push("/coordinator/calls");
@@ -266,6 +273,12 @@ export default function CallDetailsPage() {
             <>
               <Link
                 href={`/coordinator/calls/${call.id}/edit`}
+                aria-disabled={isActionLoading}
+                onClick={(e) => {
+                  if (isActionLoading) {
+                    e.preventDefault();
+                  }
+                }}
                 className="px-4 py-2 rounded-lg font-medium text-foreground bg-muted hover:bg-muted/80 transition-colors inline-flex items-center gap-2"
               >
                 <Edit className="w-4 h-4" />
@@ -273,9 +286,14 @@ export default function CallDetailsPage() {
               </Link>
               <button
                 onClick={handlePublish}
+                disabled={isActionLoading}
                 className="btn-primary inline-flex items-center gap-2"
               >
-                <Send className="w-4 h-4" />
+                {isActionLoading && confirmDialog?.actionType === 'publish' ? (
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                ) : (
+                  <Send className="w-4 h-4" />
+                )}
                 Publier
               </button>
             </>
@@ -284,9 +302,14 @@ export default function CallDetailsPage() {
           {call.status === 'published' && (
             <button
               onClick={handleClose}
+              disabled={isActionLoading}
               className="px-4 py-2 rounded-lg font-medium text-orange-600 bg-orange-50 hover:bg-orange-100 dark:bg-orange-900/20 dark:hover:bg-orange-900/30 transition-colors inline-flex items-center gap-2"
             >
-              <XCircle className="w-4 h-4" />
+              {isActionLoading && confirmDialog?.actionType === 'close' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <XCircle className="w-4 h-4" />
+              )}
               Fermer
             </button>
           )}
@@ -294,9 +317,14 @@ export default function CallDetailsPage() {
           {call.status === 'closed' && (
             <button
               onClick={handleStartReview}
+              disabled={isActionLoading}
               className="btn-primary inline-flex items-center gap-2"
             >
-              <Eye className="w-4 h-4" />
+              {isActionLoading && confirmDialog?.actionType === 'start_review' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <Eye className="w-4 h-4" />
+              )}
               Démarrer examen
             </button>
           )}
@@ -304,9 +332,14 @@ export default function CallDetailsPage() {
           {call.status === 'under_review' && (
             <button
               onClick={handlePublishResults}
+              disabled={isActionLoading}
               className="btn-primary inline-flex items-center gap-2"
             >
-              <CheckCircle className="w-4 h-4" />
+              {isActionLoading && confirmDialog?.actionType === 'publish_results' ? (
+                <Loader2 className="w-4 h-4 animate-spin" />
+              ) : (
+                <CheckCircle className="w-4 h-4" />
+              )}
               Publier résultats
             </button>
           )}
@@ -317,6 +350,7 @@ export default function CallDetailsPage() {
                 e.stopPropagation();
                 setActiveDropdown(!activeDropdown);
               }}
+              disabled={isActionLoading}
               className="p-2 hover:bg-muted rounded-lg transition-colors"
             >
               <MoreVertical className="w-5 h-5 text-muted-foreground" />
@@ -337,9 +371,14 @@ export default function CallDetailsPage() {
                       setActiveDropdown(false);
                       handleDelete();
                     }}
+                    disabled={isActionLoading}
                     className="flex items-center gap-2 px-4 py-2 text-sm text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 w-full text-left transition-colors"
                   >
-                    <Trash2 className="w-4 h-4" />
+                    {isActionLoading && confirmDialog?.actionType === 'delete' ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Trash2 className="w-4 h-4" />
+                    )}
                     Supprimer
                   </button>
                 )}

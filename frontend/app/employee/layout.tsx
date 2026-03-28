@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
+import { usePathname } from "next/navigation";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/contexts/AuthContext";
 import { EmployeeSidebar } from "@/components/employee/EmployeeSidebar";
@@ -13,8 +14,14 @@ export default function EmployeeLayout({
 }) {
   const { user, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const isPublicEmployeeRegister = pathname === "/employee/register";
 
   useEffect(() => {
+    if (isPublicEmployeeRegister) {
+      return;
+    }
+
     if (!isLoading) {
       if (!isAuthenticated) {
         router.push("/login");
@@ -27,7 +34,11 @@ export default function EmployeeLayout({
         return;
       }
     }
-  }, [isLoading, isAuthenticated, user, router]);
+  }, [isLoading, isAuthenticated, user, router, isPublicEmployeeRegister]);
+
+  if (isPublicEmployeeRegister) {
+    return <>{children}</>;
+  }
 
   // Show loading state
   if (isLoading) {

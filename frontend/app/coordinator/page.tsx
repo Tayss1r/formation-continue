@@ -5,6 +5,7 @@ import Link from "next/link";
 import {
   FileText,
   Plus,
+  BookOpen,
   Users,
   ClipboardList,
   CheckCircle,
@@ -16,12 +17,26 @@ import {
   Activity,
   Building2,
   Eye,
+  Download,
+  Send,
+  Loader2,
+  CalendarClock,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
-import { getDashboard, getPendingReviews, getRecentActivity, getAnalytics } from "@/lib/coordinator";
+import { getDashboard, getPendingReviews, getRecentActivity, getAnalytics, getMyCalls } from "@/lib/coordinator";
+import { getCallApplications } from "@/lib/applications";
+import { downloadResultsFile, publishResultsAsNews } from "@/lib/invitations";
 import { StatCard, StatusBadge, CardSkeleton, EmptyState } from "@/components/coordinator/CoordinatorUI";
 import type { DashboardStats, PendingReviewItem, RecentActivityItem, AnalyticsData } from "@/types/coordinator";
 import { ACTION_LABELS, ENTITY_TYPE_LABELS, formatActivityLabel } from "@/types/coordinator";
+
+interface DashboardResultCall {
+  id: number;
+  title: string;
+  reference_number: string;
+  status: string;
+  approved_companies: number;
+}
 
 export default function CoordinatorDashboard() {
   const { user } = useAuth();
@@ -29,6 +44,11 @@ export default function CoordinatorDashboard() {
   const [pendingItems, setPendingItems] = useState<PendingReviewItem[]>([]);
   const [recentActivity, setRecentActivity] = useState<RecentActivityItem[]>([]);
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null);
+  const [resultCalls, setResultCalls] = useState<DashboardResultCall[]>([]);
+  const [isResultsLoading, setIsResultsLoading] = useState(true);
+  const [generatingCallId, setGeneratingCallId] = useState<number | null>(null);
+  const [publishingCallId, setPublishingCallId] = useState<number | null>(null);
+  const [generatedCalls, setGeneratedCalls] = useState<Record<number, boolean>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -52,12 +72,82 @@ export default function CoordinatorDashboard() {
         setPendingItems(pendingRes.items);
         setRecentActivity(activityRes.activities);
         setAnalytics(analyticsRes.data);
+        await fetchResultsWorkflowData();
       } catch (err) {
         console.error("Error loading dashboard:", err);
         setError("Erreur lors du chargement du tableau de bord");
       } finally {
         setIsLoading(false);
       }
+  }
+
+  async function fetchResultsWorkflowData() {
+    setIsResultsLoading(true);
+    try {
+      const callsRes = await getMyCalls();
+      const eligible = callsRes.calls.filter((c) =>
+        ["published", "closed", "under_review", "results_published"].includes(c.status)
+      );
+
+      const resultData = await Promise.all(
+        eligible.map(async (call) => {
+          try {
+            const apps = await getCallApplications(call.id, "approved");
+            return {
+              id: call.id,
+              title: call.title,
+              reference_number: call.reference_number,
+              status: call.status,
+              approved_companies: apps.applications.length,
+            } as DashboardResultCall;
+          } catch {
+            return {
+              id: call.id,
+              title: call.title,
+              reference_number: call.reference_number,
+              status: call.status,
+              approved_companies: 0,
+            } as DashboardResultCall;
+          }
+        })
+      );
+
+      setResultCalls(resultData);
+      setGeneratedCalls(
+        resultData.reduce<Record<number, boolean>>((acc, item) => {
+          acc[item.id] = item.status === "results_published";
+          return acc;
+        }, {})
+      );
+    } finally {
+      setIsResultsLoading(false);
+    }
+  }
+
+  async function handleGenerateResults(callId: number) {
+    setGeneratingCallId(callId);
+    setError(null);
+    try {
+      await downloadResultsFile(callId, "pdf");
+      setGeneratedCalls((prev) => ({ ...prev, [callId]: true }));
+    } catch {
+      setError("Erreur lors de la génération du fichier de résultats");
+    } finally {
+      setGeneratingCallId(null);
+    }
+  }
+
+  async function handlePublishResults(callId: number) {
+    setPublishingCallId(callId);
+    setError(null);
+    try {
+      await publishResultsAsNews(callId);
+      await fetchResultsWorkflowData();
+    } catch {
+      setError("Erreur lors de la publication des résultats");
+    } finally {
+      setPublishingCallId(null);
+    }
   }
 
   // Calculate stats display
@@ -129,13 +219,22 @@ export default function CoordinatorDashboard() {
             Bienvenue, {user?.first_name || "Coordinateur"}
           </p>
         </div>
-        <Link
-          href="/coordinator/calls/new"
-          className="btn-primary inline-flex items-center justify-center gap-2 w-full sm:w-auto"
-        >
-          <Plus className="w-4 h-4" />
-          Nouvel Appel
-        </Link>
+        <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+          <Link
+            href="/coordinator/courses"
+            className="btn-secondary inline-flex items-center justify-center gap-2 w-full sm:w-auto"
+          >
+            <BookOpen className="w-4 h-4" />
+            Creer / Modifier Formation
+          </Link>
+          <Link
+            href="/coordinator/calls/new"
+            className="btn-primary inline-flex items-center justify-center gap-2 w-full sm:w-auto"
+          >
+            <Plus className="w-4 h-4" />
+            Nouvel Appel
+          </Link>
+        </div>
       </div>
 
       {/* Error State */}
@@ -160,7 +259,7 @@ export default function CoordinatorDashboard() {
       </div>
 
       {/* Quick Actions */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4">
         <Link
           href="/coordinator/calls/new"
           className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
@@ -172,6 +271,22 @@ export default function CoordinatorDashboard() {
             <p className="font-medium text-foreground">Créer un appel</p>
             <p className="text-sm text-muted-foreground">
               Nouvel appel à candidatures
+            </p>
+          </div>
+          <ChevronRight className="w-5 h-5 text-muted-foreground" />
+        </Link>
+
+        <Link
+          href="/coordinator/courses"
+          className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+        >
+          <div className="p-3 rounded-xl bg-purple-100 dark:bg-purple-900/30">
+            <BookOpen className="w-6 h-6 text-purple-600 dark:text-purple-400" />
+          </div>
+          <div className="flex-1">
+            <p className="font-medium text-foreground">Creer / modifier une formation</p>
+            <p className="text-sm text-muted-foreground">
+              Mettre a jour les informations + publier sur /courses
             </p>
           </div>
           <ChevronRight className="w-5 h-5 text-muted-foreground" />
@@ -201,20 +316,92 @@ export default function CoordinatorDashboard() {
             <CheckCircle className="w-6 h-6 text-green-600 dark:text-green-400" />
           </div>
           <div className="flex-1">
-            <p className="font-medium text-foreground">Publier résultats</p>
+            <p className="font-medium text-foreground">Générer & publier résultats</p>
             <p className="text-sm text-muted-foreground">
-              Gérer les publications
+              Fichier PDF + actualité publique
+            </p>
+          </div>
+          <ChevronRight className="w-5 h-5 text-muted-foreground" />
+        </Link>
+
+        <Link
+          href="/coordinator/cohorts"
+          className="flex items-center gap-4 p-4 rounded-xl bg-card border border-border hover:border-primary-300 dark:hover:border-primary-700 transition-colors"
+        >
+          <div className="p-3 rounded-xl bg-amber-100 dark:bg-amber-900/30">
+            <CalendarClock className="w-6 h-6 text-amber-600 dark:text-amber-400" />
+          </div>
+          <div className="flex-1">
+            <p className="font-medium text-foreground">Cohorts</p>
+            <p className="text-sm text-muted-foreground">
+              Creer un cohort et assigner des professeurs
             </p>
           </div>
           <ChevronRight className="w-5 h-5 text-muted-foreground" />
         </Link>
       </div>
 
+      {/* Step 6/7 Results Workflow */}
+      <div className="card-elevated p-6">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-lg font-semibold text-foreground">Génération & publication des résultats</h2>
+          <Link
+            href="/coordinator/results"
+            className="text-sm text-primary-600 dark:text-primary-400 hover:underline"
+          >
+            Ouvrir la page dédiée
+          </Link>
+        </div>
+
+        {isResultsLoading ? (
+          <div className="h-24 bg-muted rounded-xl animate-pulse" />
+        ) : resultCalls.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Aucun appel éligible pour la génération/publication des résultats.</p>
+        ) : (
+          <div className="space-y-3">
+            {resultCalls.map((call) => {
+              const isPublished = call.status === "results_published";
+              const canPublish = !isPublished && generatedCalls[call.id] && call.approved_companies > 0;
+              const isGeneratingThis = generatingCallId === call.id;
+              return (
+                <div key={call.id} className="rounded-xl border border-border p-4">
+                  <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
+                    <div>
+                      <p className="text-xs text-primary-600 dark:text-primary-400 font-medium">{call.reference_number}</p>
+                      <p className="font-medium text-foreground">{call.title}</p>
+                      <p className="text-xs text-muted-foreground">Entreprises admises: {call.approved_companies}</p>
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => handleGenerateResults(call.id)}
+                        disabled={Boolean(isGeneratingThis) || publishingCallId === call.id || call.approved_companies === 0}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-blue-700 bg-blue-50 hover:bg-blue-100 dark:text-blue-400 dark:bg-blue-900/20 dark:hover:bg-blue-900/30 transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {isGeneratingThis ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+                        PDF
+                      </button>
+                      <button
+                        onClick={() => handlePublishResults(call.id)}
+                        disabled={!canPublish || publishingCallId === call.id || Boolean(isGeneratingThis)}
+                        className="px-3 py-1.5 rounded-lg text-xs font-medium text-white bg-primary-600 hover:bg-primary-700 transition-colors inline-flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {publishingCallId === call.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Send className="w-3.5 h-3.5" />}
+                        {isPublished ? "Déjà publié" : "Publier résultats"}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
       {/* Main Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Pending Reviews */}
-        <div className="card-elevated p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="card-elevated p-3.5">
+          <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <Clock className="w-5 h-5 text-primary-500" />
               En attente d'examen
@@ -228,20 +415,20 @@ export default function CoordinatorDashboard() {
           </div>
 
           {pendingItems.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
+            <div className="py-5 text-center text-muted-foreground text-sm">
               <CheckCircle className="w-12 h-12 mx-auto mb-3 text-green-500" />
               <p>Aucun élément en attente</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {pendingItems.slice(0, 5).map((item) => (
+            <div className="space-y-2">
+              {pendingItems.slice(0, 3).map((item) => (
                 <Link
                   key={`${item.type}-${item.id}`}
                   href={item.type === 'application' 
                     ? `/coordinator/applications/${item.id}` 
                     : `/coordinator/submissions/${item.id}`
                   }
-                  className="flex items-center gap-3 p-3 rounded-lg hover:bg-muted transition-colors group"
+                  className="flex items-center gap-3 p-2 rounded-lg hover:bg-muted transition-colors group"
                 >
                   <div className={`p-2 rounded-lg ${
                     item.type === 'application' 
@@ -274,8 +461,8 @@ export default function CoordinatorDashboard() {
         </div>
 
         {/* Recent Activity */}
-        <div className="card-elevated p-6">
-          <div className="flex items-center justify-between mb-4">
+        <div className="card-elevated p-3.5">
+          <div className="flex items-center justify-between mb-3">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <Activity className="w-5 h-5 text-primary-500" />
               Activité récente
@@ -289,16 +476,16 @@ export default function CoordinatorDashboard() {
           </div>
 
           {recentActivity.length === 0 ? (
-            <div className="py-8 text-center text-muted-foreground">
+            <div className="py-5 text-center text-muted-foreground text-sm">
               <Activity className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>Aucune activité récente</p>
             </div>
           ) : (
-            <div className="space-y-3">
-              {recentActivity.slice(0, 5).map((activity) => (
+            <div className="space-y-2">
+              {recentActivity.slice(0, 3).map((activity) => (
                 <div
                   key={activity.id}
-                  className="flex items-start gap-3 p-3 rounded-lg hover:bg-muted transition-colors"
+                  className="flex items-start gap-3 p-2 rounded-lg hover:bg-muted transition-colors"
                 >
                   <div className="w-2 h-2 rounded-full bg-primary-500 mt-2 flex-shrink-0" />
                   <div className="flex-1 min-w-0">

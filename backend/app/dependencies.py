@@ -99,6 +99,7 @@ require_staff = RoleChecker([UserRole.STAFF, UserRole.ADMIN])
 require_admin = RoleChecker([UserRole.ADMIN])
 require_professor = RoleChecker([UserRole.PROFESSOR, UserRole.ADMIN])
 require_coordinator = RoleChecker([UserRole.COORDINATOR, UserRole.ADMIN])
+require_course_manager = RoleChecker([UserRole.STAFF, UserRole.COORDINATOR, UserRole.ADMIN])
 require_company = RoleChecker([UserRole.COMPANY])
 require_employee = RoleChecker([UserRole.EMPLOYEE])
 require_company = RoleChecker([UserRole.COMPANY])
@@ -115,4 +116,11 @@ async def get_admin_user(
     current_user: User = Depends(require_admin)
 ) -> User:
     """Dependency to get current user if they are admin"""
+    return current_user
+
+
+async def get_course_manager_user(
+    current_user: User = Depends(require_course_manager)
+) -> User:
+    """Dependency to get current user if they can create/manage courses"""
     return current_user

@@ -123,8 +123,7 @@ export default function CallApplicationsPage() {
     setIsActionLoading(true);
     try {
       await approveApplication(actionDialog.applicationId, {
-        decision: 'approved',
-        notes: actionDialog.notes,
+        decision_notes: actionDialog.notes || undefined,
       });
       fetchData();
       setActionDialog(null);
@@ -144,8 +143,8 @@ export default function CallApplicationsPage() {
     setIsActionLoading(true);
     try {
       await rejectApplication(actionDialog.applicationId, {
-        decision: 'rejected',
-        notes: actionDialog.notes,
+        rejection_reason: actionDialog.notes || 'Candidature rejetée',
+        decision_notes: actionDialog.notes || undefined,
       });
       fetchData();
       setActionDialog(null);

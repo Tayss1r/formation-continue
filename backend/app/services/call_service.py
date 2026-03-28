@@ -25,6 +25,7 @@ from ..error import (
     CallAlreadyPublished,
     CallHasApplications,
     InvalidDepartment,
+    DuplicateCallReference,
 )
 
 
@@ -86,11 +87,11 @@ class CallService:
         
         # Use provided reference number or generate one
         if call_data.reference_number:
-            reference = call_data.reference_number
+            reference = call_data.reference_number.strip()
             # Check if reference already exists
             existing = await CallService.get_call_by_reference(reference, session)
             if existing:
-                raise ValueError(f"Le numéro de référence '{reference}' existe déjà")
+                raise DuplicateCallReference()
         else:
             # Generate unique reference number
             reference = generate_reference_number()

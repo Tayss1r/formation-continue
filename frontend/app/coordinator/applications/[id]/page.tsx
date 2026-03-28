@@ -17,6 +17,7 @@ import {
   Mail,
   Phone,
   MapPin,
+  Users,
 } from "lucide-react";
 import { getApplicationDetails, approveApplication, rejectApplication } from "@/lib/applications";
 import { StatusBadge, ConfirmDialog } from "@/components/coordinator/CoordinatorUI";
@@ -69,10 +70,9 @@ export default function ApplicationDetailPage() {
     setIsActionLoading(true);
     try {
       await approveApplication(applicationId, {
-        decision: 'approved',
-        notes: actionDialog.notes,
+        decision_notes: actionDialog.notes || undefined,
       });
-      fetchApplication();
+      await fetchApplication();
       setActionDialog(null);
     } catch (err) {
       console.error("Error approving:", err);
@@ -90,10 +90,10 @@ export default function ApplicationDetailPage() {
     setIsActionLoading(true);
     try {
       await rejectApplication(applicationId, {
-        decision: 'rejected',
-        notes: actionDialog.notes,
+        rejection_reason: actionDialog.notes || 'Candidature rejetée',
+        decision_notes: actionDialog.notes || undefined,
       });
-      fetchApplication();
+      await fetchApplication();
       setActionDialog(null);
     } catch (err) {
       console.error("Error rejecting:", err);
@@ -216,19 +216,32 @@ export default function ApplicationDetailPage() {
           <div className="flex flex-wrap gap-2">
             <button
               onClick={() => setActionDialog({ type: 'reject', notes: '' })}
-              className="px-4 py-2 rounded-lg font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 transition-colors inline-flex items-center gap-2"
+              disabled={isActionLoading || !!actionDialog}
+              className="px-4 py-2 rounded-lg font-medium text-red-600 bg-red-50 hover:bg-red-100 dark:bg-red-900/20 dark:hover:bg-red-900/30 transition-colors inline-flex items-center gap-2 disabled:opacity-50"
             >
               <XCircle className="w-4 h-4" />
               Rejeter
             </button>
             <button
               onClick={() => setActionDialog({ type: 'approve', notes: '' })}
-              className="px-4 py-2 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 transition-colors inline-flex items-center gap-2"
+              disabled={isActionLoading || !!actionDialog}
+              className="px-4 py-2 rounded-lg font-medium text-white bg-green-600 hover:bg-green-700 transition-colors inline-flex items-center gap-2 disabled:opacity-50"
             >
               <CheckCircle className="w-4 h-4" />
               Approuver
             </button>
           </div>
+        )}
+
+        {/* View Employees Button (for approved applications) */}
+        {application.status === 'approved' && (
+          <Link
+            href={`/coordinator/applications/${applicationId}/employees`}
+            className="px-4 py-2 rounded-lg font-medium text-white bg-blue-600 hover:bg-blue-700 transition-colors inline-flex items-center gap-2"
+          >
+            <Users className="w-4 h-4" />
+            Voir les employés
+          </Link>
         )}
       </div>
 
@@ -305,9 +318,9 @@ export default function ApplicationDetailPage() {
                       </p>
                       <div className="flex items-center gap-2 mt-1">
                         <StatusBadge status={doc.review_status} type="document" size="sm" />
-                        {doc.rejection_reason && (
+                        {doc.review_notes && (
                           <span className="text-xs text-red-500">
-                            {doc.rejection_reason}
+                            {doc.review_notes}
                           </span>
                         )}
                       </div>

@@ -11,6 +11,7 @@ import {
   ArrowRight,
   Send,
   Trash2,
+  Newspaper,
 } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import { deleteMyApplication, getMyApplications } from "@/lib/applications";
@@ -300,6 +301,37 @@ export default function CompanyDashboardPage() {
               >
                 Voir tous les appels
               </Link>
+            </div>
+
+            <div className="lg:col-span-3 rounded-2xl bg-card border border-border p-6">
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                    <Newspaper className="w-5 h-5 text-primary-500" />
+                    Résultats publiés
+                  </h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Une fois validés par le coordinateur, les résultats (entreprises et employés admis) sont publiés dans les actualités avec un fichier téléchargeable.
+                  </p>
+                </div>
+                <Link href="/#news" className="btn-secondary whitespace-nowrap">
+                  Voir les actualités
+                </Link>
+              </div>
+            </div>
+
+            <div className="lg:col-span-3 rounded-2xl bg-card border border-border p-6 shadow-sm">
+              <div className="flex items-center justify-between gap-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-foreground">Présences et Agenda</h2>
+                  <p className="text-sm text-muted-foreground mt-1">
+                    Consultez les détails des présences des employés et l'agenda des échéances sur une page dédiée.
+                  </p>
+                </div>
+                <Link href="/dashboard/attendance-agenda" className="btn-secondary whitespace-nowrap">
+                  Ouvrir la page
+                </Link>
+              </div>
             </div>
           </div>
         </>

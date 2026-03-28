@@ -522,7 +522,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          <form onSubmit={handleProfileUpdate} className="p-6 space-y-6">
+          <form onSubmit={handleProfileUpdate} className="p-6 grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* Full Name */}
             <div>
               <label
@@ -532,13 +532,15 @@ export default function SettingsPage() {
                 Full Name
               </label>
               <div className="relative">
-                <User className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center">
+                  <User className="w-5 h-5 text-muted-foreground" />
+                </span>
                 <input
                   type="text"
                   id="fullname"
                   value={fullname}
                   onChange={(e) => setFullname(e.target.value)}
-                  className="form-input pl-12"
+                  className="form-input pl-12 leading-5"
                   placeholder="Your full name"
                   minLength={4}
                   maxLength={20}
@@ -559,7 +561,7 @@ export default function SettingsPage() {
                 Username
               </label>
               <div className="relative">
-                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-muted-foreground font-medium">
+                <span className="pointer-events-none absolute inset-y-0 left-0 w-12 flex items-center justify-center text-muted-foreground font-semibold">
                   @
                 </span>
                 <input
@@ -567,7 +569,7 @@ export default function SettingsPage() {
                   id="username"
                   value={username}
                   onChange={(e) => setUsername(e.target.value)}
-                  className="form-input pl-10"
+                  className="form-input pl-14 leading-5"
                   placeholder="username"
                   maxLength={10}
                   required
@@ -587,13 +589,15 @@ export default function SettingsPage() {
                 Email Address
               </label>
               <div className="relative">
-                <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center">
+                  <Mail className="w-5 h-5 text-muted-foreground" />
+                </span>
                 <input
                   type="email"
                   id="email"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  className="form-input pl-12"
+                  className="form-input pl-12 leading-5"
                   placeholder="your@email.com"
                   required
                 />
@@ -613,20 +617,22 @@ export default function SettingsPage() {
                 <span className="text-muted-foreground font-normal">(optional)</span>
               </label>
               <div className="relative">
-                <Phone className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-muted-foreground" />
+                <span className="pointer-events-none absolute inset-y-0 left-4 flex items-center">
+                  <Phone className="w-5 h-5 text-muted-foreground" />
+                </span>
                 <input
                   type="tel"
                   id="phone"
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  className="form-input pl-12"
+                  className="form-input pl-12 leading-5"
                   placeholder="+33 6 12 34 56 78"
                 />
               </div>
             </div>
 
             {/* Account Status */}
-            <div className="flex items-center gap-3 p-4 bg-muted rounded-xl">
+            <div className="lg:col-span-2 flex items-center gap-3 p-4 bg-muted rounded-xl">
               <div
                 className={`w-3 h-3 rounded-full ${
                   profile?.is_verified ? "bg-green-500" : "bg-yellow-500"
@@ -655,7 +661,7 @@ export default function SettingsPage() {
             </div>
 
             {/* Submit Button */}
-            <div className="flex justify-end pt-4">
+            <div className="lg:col-span-2 flex justify-end pt-2">
               <button
                 type="submit"
                 disabled={isSaving}

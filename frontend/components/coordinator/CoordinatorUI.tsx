@@ -11,10 +11,12 @@ interface StatusBadgeProps {
 
 const STATUS_CONFIG: Record<string, { label: string; color: string }> = {
   // Application statuses
-  pending: { label: 'En attente', color: 'gray' },
+  pending: { label: 'Documents en attente', color: 'gray' },
+  documents_pending: { label: 'Documents en attente', color: 'gray' },
   submitted: { label: 'Soumise', color: 'blue' },
   under_review: { label: 'En examen', color: 'yellow' },
-  additional_info_requested: { label: 'Info demandée', color: 'orange' },
+  additional_info_requested: { label: 'Infos supplémentaires requises', color: 'orange' },
+  additional_info_required: { label: 'Infos supplémentaires requises', color: 'orange' },
   approved: { label: 'Approuvée', color: 'green' },
   rejected: { label: 'Rejetée', color: 'red' },
   withdrawn: { label: 'Retirée', color: 'gray' },
@@ -91,6 +93,7 @@ interface ConfirmDialogProps {
   isOpen: boolean;
   title: string;
   message: string;
+  errorMessage?: string;
   confirmLabel?: string;
   cancelLabel?: string;
   variant?: 'danger' | 'primary' | 'warning';
@@ -103,6 +106,7 @@ export function ConfirmDialog({
   isOpen,
   title,
   message,
+  errorMessage,
   confirmLabel = 'Confirmer',
   cancelLabel = 'Annuler',
   variant = 'primary',
@@ -130,6 +134,11 @@ export function ConfirmDialog({
       <div className="relative bg-card rounded-2xl shadow-elevated border border-border max-w-md w-full p-6 animate-fade-up">
         <h3 className="text-lg font-semibold text-foreground mb-2">{title}</h3>
         <p className="text-muted-foreground mb-6">{message}</p>
+        {errorMessage && (
+          <div className="mb-4 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20 px-3 py-2 text-sm text-red-700 dark:text-red-400">
+            {errorMessage}
+          </div>
+        )}
         
         <div className="flex gap-3 justify-end">
           <button

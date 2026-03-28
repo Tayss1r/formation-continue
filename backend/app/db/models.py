@@ -13,13 +13,15 @@ Key Entities:
 - AuditLog: Traceability for all decisions
 """
 
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date, time
 from typing import Optional, List
 from enum import Enum
 from .database import Base
 
 from sqlalchemy import (
     TIMESTAMP,
+    Date,
+    Time,
     text,
     ForeignKey,
     UniqueConstraint,
@@ -119,6 +121,13 @@ class EmployeeSubmissionStatus(str, Enum):
     REJECTED = "rejected"
 
 
+class AttendanceStatus(str, Enum):
+    """Attendance status for a cohort session."""
+    PRESENT = "present"
+    ABSENT = "absent"
+    LATE = "late"
+
+
 # =============================================================================
 # USER & AUTH MODELS
 # =============================================================================
@@ -208,6 +217,18 @@ class User(Base):
         foreign_keys="CallForApplicants.created_by_id",
     )
 
+    created_cohorts = relationship(
+        "Cohort",
+        back_populates="created_by",
+        foreign_keys="Cohort.created_by_id",
+    )
+
+    cohort_professor_assignments = relationship(
+        "CohortProfessorAssignment",
+        back_populates="assigned_by",
+        foreign_keys="CohortProfessorAssignment.assigned_by_id",
+    )
+
 
 class Company(Base):
     """
@@ -272,6 +293,19 @@ class Professor(Base):
         back_populates="professor",
     )
 
+    cohorts = relationship(
+        "Cohort",
+        secondary="cohort_professor_assignments",
+        back_populates="professors",
+        viewonly=True,
+    )
+
+    cohort_sessions = relationship(
+        "CohortSession",
+        back_populates="professor",
+        cascade="all, delete-orphan",
+    )
+
 
 class EmployeeProfile(Base):
     """
@@ -300,6 +334,12 @@ class EmployeeProfile(Base):
     # Document submissions
     submissions = relationship(
         "EmployeeSubmission",
+        back_populates="employee",
+        cascade="all, delete-orphan",
+    )
+
+    cohort_attendance_records = relationship(
+        "CohortSessionAttendance",
         back_populates="employee",
         cascade="all, delete-orphan",
     )
@@ -397,6 +437,11 @@ class Course(Base):
         "CourseFeedback",
         back_populates="course",
         cascade="all, delete-orphan",
+    )
+
+    cohorts = relationship(
+        "Cohort",
+        back_populates="course",
     )
 
 
@@ -605,6 +650,228 @@ class CallForApplicants(Base):
         back_populates="call",
         cascade="all, delete-orphan",
     )
+
+    cohorts = relationship(
+        "Cohort",
+        back_populates="call",
+    )
+
+
+class Cohort(Base):
+    """
+    Training cohort created after results publication.
+    Defines the training date/hour boundaries for subsequent execution phase.
+    """
+    __tablename__ = "cohorts"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    name: Mapped[str] = mapped_column(nullable=False, index=True)
+
+    call_id: Mapped[int] = mapped_column(
+        ForeignKey("calls_for_applicants.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    course_id: Mapped[int] = mapped_column(
+        ForeignKey("courses.id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+
+    training_start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    training_end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    daily_start_hour: Mapped[time] = mapped_column(Time, nullable=False)
+    daily_end_hour: Mapped[time] = mapped_column(Time, nullable=False)
+
+    created_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        onupdate=datetime.now,
+        nullable=False,
+    )
+
+    call = relationship("CallForApplicants", back_populates="cohorts")
+    course = relationship("Course", back_populates="cohorts")
+    created_by = relationship("User", back_populates="created_cohorts", foreign_keys=[created_by_id])
+
+    professor_assignments = relationship(
+        "CohortProfessorAssignment",
+        back_populates="cohort",
+        cascade="all, delete-orphan",
+    )
+
+    professors = relationship(
+        "Professor",
+        secondary="cohort_professor_assignments",
+        back_populates="cohorts",
+        viewonly=True,
+    )
+
+    sessions = relationship(
+        "CohortSession",
+        back_populates="cohort",
+        cascade="all, delete-orphan",
+    )
+
+
+class CohortProfessorAssignment(Base):
+    """Many-to-many assignment between cohorts and professors."""
+    __tablename__ = "cohort_professor_assignments"
+    __table_args__ = (
+        UniqueConstraint("cohort_id", "professor_id", name="uq_cohort_professor_assignment"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    cohort_id: Mapped[int] = mapped_column(
+        ForeignKey("cohorts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    professor_id: Mapped[int] = mapped_column(
+        ForeignKey("professors.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    assigned_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    assigned_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+
+    cohort = relationship("Cohort", back_populates="professor_assignments")
+    professor = relationship("Professor", backref="cohort_assignments")
+    assigned_by = relationship("User", back_populates="cohort_professor_assignments", foreign_keys=[assigned_by_id])
+
+
+class CohortSession(Base):
+    """Training session planned by an assigned professor inside cohort margins."""
+    __tablename__ = "cohort_sessions"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    cohort_id: Mapped[int] = mapped_column(
+        ForeignKey("cohorts.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    professor_id: Mapped[int] = mapped_column(
+        ForeignKey("professors.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    title: Mapped[str] = mapped_column(nullable=False)
+    session_date: Mapped[date] = mapped_column(Date, nullable=False, index=True)
+    start_time: Mapped[time] = mapped_column(Time, nullable=False)
+    end_time: Mapped[time] = mapped_column(Time, nullable=False)
+    location: Mapped[Optional[str]] = mapped_column(nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        onupdate=datetime.now,
+        nullable=False,
+    )
+
+    cohort = relationship("Cohort", back_populates="sessions")
+    professor = relationship("Professor", back_populates="cohort_sessions")
+    attendance_records = relationship(
+        "CohortSessionAttendance",
+        back_populates="session",
+        cascade="all, delete-orphan",
+    )
+
+
+class CohortSessionAttendance(Base):
+    """Attendance record for one employee in one cohort session."""
+    __tablename__ = "cohort_session_attendance"
+    __table_args__ = (
+        UniqueConstraint("session_id", "employee_id", name="uq_cohort_session_employee_attendance"),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    session_id: Mapped[int] = mapped_column(
+        ForeignKey("cohort_sessions.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    employee_id: Mapped[int] = mapped_column(
+        ForeignKey("employee_profiles.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    status: Mapped[AttendanceStatus] = mapped_column(
+        SQLEnum(
+            AttendanceStatus,
+            name="attendance_status_type",
+            validate_strings=True,
+            create_constraint=True,
+            values_callable=lambda obj: [e.value for e in obj],
+        ),
+        nullable=False,
+        server_default=AttendanceStatus.PRESENT.value,
+    )
+
+    notes: Mapped[Optional[str]] = mapped_column(nullable=True)
+
+    marked_by_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("users.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    marked_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+
+    updated_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        onupdate=datetime.now,
+        nullable=False,
+    )
+
+    session = relationship("CohortSession", back_populates="attendance_records")
+    employee = relationship("EmployeeProfile", back_populates="cohort_attendance_records")
+    marked_by = relationship("User", backref="marked_cohort_attendance", foreign_keys=[marked_by_id])
 
 
 class CompanyApplication(Base):
@@ -992,6 +1259,99 @@ class News(Base):
     )
     
     created_by = relationship("User", backref="created_news")
+
+    # Optional link to call (for result publication)
+    call_id: Mapped[Optional[int]] = mapped_column(
+        ForeignKey("calls_for_applicants.id", ondelete="SET NULL"),
+        nullable=True,
+    )
+
+    # Optional attached file for result publication
+    attachment_path: Mapped[Optional[str]] = mapped_column(nullable=True)
+
+    call = relationship("CallForApplicants", backref="news_items")
+
+
+# =============================================================================
+# INVITATION MODELS
+# =============================================================================
+
+class CompanyInvitation(Base):
+    """
+    Invitation token sent to a company after their application is approved.
+    Allows the company to invite employees for the approved call.
+    """
+    __tablename__ = "company_invitations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    application_id: Mapped[int] = mapped_column(
+        ForeignKey("company_applications.id", ondelete="CASCADE"),
+        nullable=False,
+        unique=True,
+        index=True,
+    )
+
+    token: Mapped[str] = mapped_column(unique=True, nullable=False, index=True)
+
+    is_used: Mapped[bool] = mapped_column(
+        server_default="false",
+        nullable=False,
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+
+    # Relationships
+    application = relationship("CompanyApplication", backref="invitation")
+
+
+class EmployeeInvitation(Base):
+    """
+    Invitation token sent to an individual employee by a company.
+    Links the employee to the company and the specific call/application.
+    """
+    __tablename__ = "employee_invitations"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+
+    company_invitation_id: Mapped[int] = mapped_column(
+        ForeignKey("company_invitations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+
+    employee_name: Mapped[str] = mapped_column(nullable=False)
+    employee_email: Mapped[str] = mapped_column(nullable=False, index=True)
+
+    token: Mapped[str] = mapped_column(unique=True, nullable=False, index=True)
+
+    is_used: Mapped[bool] = mapped_column(
+        server_default="false",
+        nullable=False,
+    )
+
+    expires_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        nullable=False,
+    )
+
+    created_at: Mapped[datetime] = mapped_column(
+        TIMESTAMP(timezone=True),
+        server_default=text("NOW()"),
+        nullable=False,
+    )
+
+    # Relationships
+    company_invitation = relationship("CompanyInvitation", backref="employee_invitations")
 
 
 # =============================================================================

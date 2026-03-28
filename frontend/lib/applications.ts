@@ -15,6 +15,7 @@ import type {
   ApplicationListResponse,
   ApplicationActionResponse,
   DocumentActionResponse,
+  CompanyAttendanceSummaryResponse,
 } from "@/types/application";
 import type { ApplicationStatus } from "@/types/call";
 
@@ -46,6 +47,16 @@ export async function getMyApplications(
     ? `/applications/my-applications?${queryString}`
     : "/applications/my-applications";
   return apiClient.get<ApplicationListResponse>(url, true);
+}
+
+/**
+ * Get attendance summary for admitted employees of current company.
+ */
+export async function getMyAttendanceSummary(): Promise<CompanyAttendanceSummaryResponse> {
+  return apiClient.get<CompanyAttendanceSummaryResponse>(
+    "/applications/attendance-summary",
+    true
+  );
 }
 
 /**

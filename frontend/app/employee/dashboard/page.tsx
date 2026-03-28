@@ -39,7 +39,8 @@ export default function EmployeeDashboard() {
         setAvailableSubmissions(availableData.available || []);
       } catch (err) {
         console.error("Error loading dashboard:", err);
-        setError("Erreur lors du chargement des données");
+        const error = err as { message?: string };
+        setError(error.message || "Erreur lors du chargement des données");
       } finally {
         setIsLoading(false);
       }
@@ -52,7 +53,7 @@ export default function EmployeeDashboard() {
   const totalSubmissions = submissions.length;
   const pendingSubmissions = submissions.filter(s => ["pending", "submitted"].includes(s.status)).length;
   const approvedSubmissions = submissions.filter(s => s.status === "approved").length;
-  const availableCount = availableSubmissions.filter(a => !a.has_submitted).length;
+  const availableCount = availableSubmissions.length;
 
   // Stats cards data
   const stats = [
@@ -174,7 +175,7 @@ export default function EmployeeDashboard() {
       </div>
 
       {/* Available Submissions */}
-      {availableCount > 0 && (
+      {availableSubmissions.length > 0 && (
         <div className="rounded-2xl bg-primary-50 dark:bg-primary-900/20 border border-primary-200 dark:border-primary-800 p-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
@@ -182,17 +183,16 @@ export default function EmployeeDashboard() {
               Formations disponibles pour vous
             </h2>
             <span className="text-sm text-primary-600 dark:text-primary-400">
-              {availableCount} formation(s) disponible(s)
+              {availableSubmissions.length} formation(s)
             </span>
           </div>
           <div className="grid gap-3 md:grid-cols-2">
             {availableSubmissions
-              .filter(a => !a.has_submitted)
               .slice(0, 4)
               .map((available) => (
                 <Link
                   key={available.application_id}
-                  href={`/employee/submit/${available.application_id}`}
+                  href={available.submission_id ? `/employee/submissions/${available.submission_id}` : `/employee/submissions`}
                   className="flex items-center justify-between p-4 rounded-xl bg-white dark:bg-slate-800 border border-border hover:border-primary-300 transition-colors"
                 >
                   <div className="flex-1 min-w-0">
@@ -201,6 +201,9 @@ export default function EmployeeDashboard() {
                     </p>
                     <p className="text-sm text-muted-foreground">
                       {available.department}
+                    </p>
+                    <p className="text-xs mt-1 text-primary-600 dark:text-primary-400">
+                      {available.has_submitted ? "Continuer le dépôt des documents" : "Créer votre soumission"}
                     </p>
                   </div>
                   <ChevronRight className="w-5 h-5 text-muted-foreground" />
@@ -248,10 +251,10 @@ export default function EmployeeDashboard() {
               >
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-foreground truncate">
-                    {submission.call?.title || `Soumission #${submission.id}`}
+                      {submission.application?.call?.title || `Soumission #${submission.id}`}
                   </p>
                   <p className="text-sm text-muted-foreground">
-                    {submission.call?.department || `Application #${submission.application_id}`}
+                      {submission.application?.call?.department || `Application #${submission.company_application_id}`}
                   </p>
                 </div>
                 <div className="flex items-center gap-3">

@@ -2,7 +2,8 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { Menu, X, GraduationCap, User, LogOut, ChevronDown } from "lucide-react";
+import Image from "next/image";
+import { Menu, X, User, LogOut, ChevronDown } from "lucide-react";
 import { ThemeToggle } from "./ThemeToggle";
 import { useAuth } from "@/contexts/AuthContext";
 
@@ -23,7 +24,6 @@ export function Header() {
   const navLinks = [
     { name: "Accueil", href: "/" },
     { name: "Formations", href: "/courses" },
-    { name: "Comment ça marche", href: "#how-it-works" },
     { name: "Contact", href: "#contact" },
   ];
 
@@ -42,9 +42,14 @@ export function Header() {
         <div className="flex items-center justify-between h-18 py-4">
           {/* Logo */}
           <Link href="/" className="flex items-center gap-2.5">
-            <div className="w-10 h-10 rounded-xl bg-primary-600 flex items-center justify-center shadow-primary">
-              <GraduationCap className="w-6 h-6 text-white" />
-            </div>
+            <Image
+              src="/radess.png"
+              alt="Radess logo"
+              width={40}
+              height={40}
+              className="w-10 h-10 object-contain"
+              priority
+            />
             <span className="text-xl font-bold text-foreground">
               Forminy
             </span>

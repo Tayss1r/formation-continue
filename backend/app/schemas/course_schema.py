@@ -121,6 +121,7 @@ class CourseListOut(BaseModel):
     duration_hours: Optional[int] = None
     sector: Optional[str] = None
     department: Optional[str] = None
+    is_published: bool = True
 
     model_config = ConfigDict(from_attributes=True)
 

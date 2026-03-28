@@ -15,10 +15,13 @@ from .api.materials import materials_router
 from .api.news import news_router
 from .api.admin import admin_router
 from .api.feedback import feedback_router
+from .api.employee_training import employee_training_router
+from .api.contact import contact_router
 from .middleware import register_middleware
 
 from .error import register_all_errors
 from .api.auth import auth_router
+from .api.invitations import invitations_router
 from .core.config import settings
 
 # Configure logging
@@ -73,3 +76,6 @@ app.include_router(materials_router, prefix=f"/api/{API_VERSION}/materials", tag
 app.include_router(news_router, prefix=f"/api/{API_VERSION}/news", tags=['News'])
 app.include_router(admin_router, prefix=f"/api/{API_VERSION}/admin", tags=['Admin'])
 app.include_router(feedback_router, prefix=f"/api/{API_VERSION}/feedback", tags=['Feedback'])
+app.include_router(invitations_router, prefix=f"/api/{API_VERSION}/invitations", tags=['Invitations'])
+app.include_router(employee_training_router, prefix=f"/api/{API_VERSION}/employee/training", tags=['Employee Training'])
+app.include_router(contact_router, prefix=f"/api/{API_VERSION}/contact", tags=['Contact'])

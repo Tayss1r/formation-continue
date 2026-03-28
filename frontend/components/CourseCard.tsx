@@ -1,6 +1,6 @@
 "use client";
 
-import { Clock, Users, Calendar, Building2 } from "lucide-react";
+import { Calendar } from "lucide-react";
 import { getImageUrl } from "@/lib/config";
 import type { CourseListItem } from "@/types/course";
 import Link from "next/link";
@@ -74,16 +74,6 @@ export function CourseCard({ course }: CourseCardProps) {
 
           {/* Meta Info */}
           <div className="flex flex-wrap gap-3 mb-4 text-xs text-muted-foreground">
-            {course.duration_hours && (
-              <div className="flex items-center gap-1">
-                <Clock className="w-4 h-4" />
-                <span>{course.duration_hours}h</span>
-              </div>
-            )}
-            <div className="flex items-center gap-1">
-              <Users className="w-4 h-4" />
-              <span>{course.max_seats} places</span>
-            </div>
             {formattedStartDate && (
               <div className="flex items-center gap-1">
                 <Calendar className="w-4 h-4" />

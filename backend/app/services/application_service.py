@@ -297,9 +297,12 @@ class ApplicationService:
         session: AsyncSession
     ) -> CompanyApplication:
         """Approve an application"""
-        if application.status != ApplicationStatus.UNDER_REVIEW:
+        if application.status not in [
+            ApplicationStatus.SUBMITTED,
+            ApplicationStatus.UNDER_REVIEW,
+        ]:
             raise InvalidApplicationStatus(
-                "Can only approve applications in UNDER_REVIEW status"
+                "Can only approve applications in SUBMITTED or UNDER_REVIEW status"
             )
         
         now = datetime.now(timezone.utc)
@@ -322,9 +325,12 @@ class ApplicationService:
         session: AsyncSession
     ) -> CompanyApplication:
         """Reject an application"""
-        if application.status != ApplicationStatus.UNDER_REVIEW:
+        if application.status not in [
+            ApplicationStatus.SUBMITTED,
+            ApplicationStatus.UNDER_REVIEW,
+        ]:
             raise InvalidApplicationStatus(
-                "Can only reject applications in UNDER_REVIEW status"
+                "Can only reject applications in SUBMITTED or UNDER_REVIEW status"
             )
         
         now = datetime.now(timezone.utc)

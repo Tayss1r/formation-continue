@@ -15,13 +15,14 @@ from typing import Optional, List
 from datetime import datetime
 from fastapi import UploadFile, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, distinct
 from sqlalchemy.orm import selectinload
 
 from ..db.models import (
     User, Professor, Course, CourseMaterial, 
     EmployeeProfile, Company, CompanyApplication, EmployeeSubmission,
-    CallForApplicants, CallStatus, ApplicationStatus, EmployeeSubmissionStatus
+    ApplicationStatus, EmployeeSubmissionStatus,
+    Cohort, CohortProfessorAssignment, CohortSession
 )
 from ..core.config import settings
 
@@ -62,37 +63,46 @@ class ProfessorService:
                 detail="Professor profile not found"
             )
         
-        # Get total courses
-        courses_query = select(func.count(Course.id)).where(Course.professor_id == professor.id)
-        total_courses = (await session.execute(courses_query)).scalar() or 0
-        
-        # Get total active calls for professor's courses
-        active_calls_query = (
-            select(func.count(CallForApplicants.id))
-            .join(Course, CallForApplicants.course_id == Course.id)
+        # All stats are cohort-driven: professors are assigned to cohorts, not directly to courses.
+        total_courses_query = (
+            select(func.count(distinct(Cohort.course_id)))
+            .join(CohortProfessorAssignment, CohortProfessorAssignment.cohort_id == Cohort.id)
+            .where(CohortProfessorAssignment.professor_id == professor.id)
+        )
+        total_courses = (await session.execute(total_courses_query)).scalar() or 0
+
+        total_sessions_query = (
+            select(func.count(CohortSession.id))
+            .where(CohortSession.professor_id == professor.id)
+        )
+        total_sessions = (await session.execute(total_sessions_query)).scalar() or 0
+
+        from datetime import date
+        upcoming_sessions_query = (
+            select(func.count(CohortSession.id))
             .where(
                 and_(
-                    Course.professor_id == professor.id,
-                    CallForApplicants.status == CallStatus.OPEN
+                    CohortSession.professor_id == professor.id,
+                    CohortSession.session_date >= date.today(),
                 )
             )
         )
-        active_calls = (await session.execute(active_calls_query)).scalar() or 0
-        
-        # Get total approved employees (via approved submissions)
+        upcoming_sessions = (await session.execute(upcoming_sessions_query)).scalar() or 0
+
         approved_employees_query = (
-            select(func.count(EmployeeSubmission.id))
+            select(func.count(distinct(EmployeeSubmission.id)))
             .join(CompanyApplication, EmployeeSubmission.company_application_id == CompanyApplication.id)
-            .join(CallForApplicants, CompanyApplication.call_id == CallForApplicants.id)
-            .join(Course, CallForApplicants.course_id == Course.id)
+            .join(Cohort, Cohort.call_id == CompanyApplication.call_id)
+            .join(CohortProfessorAssignment, CohortProfessorAssignment.cohort_id == Cohort.id)
             .where(
                 and_(
-                    Course.professor_id == professor.id,
-                    EmployeeSubmission.status == EmployeeSubmissionStatus.APPROVED
+                    CohortProfessorAssignment.professor_id == professor.id,
+                    CompanyApplication.status == ApplicationStatus.APPROVED,
+                    EmployeeSubmission.status == EmployeeSubmissionStatus.APPROVED,
                 )
             )
         )
-        total_approved = (await session.execute(approved_employees_query)).scalar() or 0
+        total_enrolled = (await session.execute(approved_employees_query)).scalar() or 0
         
         # Get recent courses (limit 5)
         recent_courses, _ = await ProfessorService.get_professor_courses(
@@ -116,8 +126,9 @@ class ProfessorService:
             "department_display": dept_display,
             "stats": {
                 "total_courses": total_courses,
-                "active_calls": active_calls,
-                "total_approved_employees": total_approved,
+                "total_sessions": total_sessions,
+                "total_enrolled_employees": total_enrolled,
+                "upcoming_sessions": upcoming_sessions,
             },
             "recent_courses": recent_courses,
         }
@@ -137,53 +148,83 @@ class ProfessorService:
         if not professor:
             return [], 0
         
-        # Get total count
-        count_query = select(func.count(Course.id)).where(Course.professor_id == professor.id)
+        # Get total count by distinct course ids across assigned cohorts
+        count_query = (
+            select(func.count(distinct(Cohort.course_id)))
+            .join(CohortProfessorAssignment, CohortProfessorAssignment.cohort_id == Cohort.id)
+            .where(CohortProfessorAssignment.professor_id == professor.id)
+        )
         total = (await session.execute(count_query)).scalar() or 0
-        
-        # Get paginated courses
+
+        # Get paginated course ids from assigned cohorts
         offset = (page - 1) * per_page
-        courses_query = (
-            select(Course)
-            .where(Course.professor_id == professor.id)
-            .order_by(Course.created_at.desc())
+        course_ids_query = (
+            select(distinct(Cohort.course_id))
+            .join(CohortProfessorAssignment, CohortProfessorAssignment.cohort_id == Cohort.id)
+            .where(CohortProfessorAssignment.professor_id == professor.id)
+            .order_by(Cohort.course_id.asc())
             .offset(offset)
             .limit(per_page)
         )
-        
-        result = await session.execute(courses_query)
-        courses = result.scalars().all()
+        course_ids = list((await session.execute(course_ids_query)).scalars().all())
+
+        if not course_ids:
+            return [], total
+
+        courses_query = select(Course).where(Course.id.in_(course_ids)).order_by(Course.created_at.desc())
+        courses = list((await session.execute(courses_query)).scalars().all())
         
         # Enrich with stats
         course_list = []
         
         for course in courses:
-            # Count approved employees via submissions
+            # Cohorts assigned to this professor for the current course
+            cohort_rows = (
+                await session.execute(
+                    select(Cohort.id, Cohort.name, Cohort.call_id)
+                    .join(CohortProfessorAssignment, CohortProfessorAssignment.cohort_id == Cohort.id)
+                    .where(
+                        and_(
+                            CohortProfessorAssignment.professor_id == professor.id,
+                            Cohort.course_id == course.id,
+                        )
+                    )
+                    .order_by(Cohort.training_start_date.asc())
+                )
+            ).all()
+            cohort_names = [row.name for row in cohort_rows]
+            cohort_call_ids = [row.call_id for row in cohort_rows]
+
+            # Count approved employees via submissions for calls mapped by assigned cohorts
             approved_query = (
                 select(func.count(EmployeeSubmission.id))
                 .join(CompanyApplication, EmployeeSubmission.company_application_id == CompanyApplication.id)
-                .join(CallForApplicants, CompanyApplication.call_id == CallForApplicants.id)
                 .where(
                     and_(
-                        CallForApplicants.course_id == course.id,
+                        CompanyApplication.call_id.in_(cohort_call_ids),
                         EmployeeSubmission.status == EmployeeSubmissionStatus.APPROVED
                     )
                 )
             )
             approved_count = (await session.execute(approved_query)).scalar() or 0
-            
-            # Count active calls
-            active_calls_query = (
-                select(func.count(CallForApplicants.id))
+
+            # Count upcoming sessions for this professor on assigned cohorts of this course
+            from datetime import date
+            upcoming_sessions_query = (
+                select(func.count(CohortSession.id))
+                .join(Cohort, Cohort.id == CohortSession.cohort_id)
+                .join(CohortProfessorAssignment, CohortProfessorAssignment.cohort_id == Cohort.id)
                 .where(
                     and_(
-                        CallForApplicants.course_id == course.id,
-                        CallForApplicants.status == CallStatus.OPEN
+                        CohortProfessorAssignment.professor_id == professor.id,
+                        Cohort.course_id == course.id,
+                        CohortSession.professor_id == professor.id,
+                        CohortSession.session_date >= date.today(),
                     )
                 )
             )
-            active_calls_count = (await session.execute(active_calls_query)).scalar() or 0
-            
+            upcoming_sessions = (await session.execute(upcoming_sessions_query)).scalar() or 0
+
             # Count materials
             materials_query = select(func.count(CourseMaterial.id)).where(
                 CourseMaterial.course_id == course.id
@@ -207,9 +248,10 @@ class ProfessorService:
                 "max_seats": course.max_seats,
                 "image_path": course.image_path,
                 "is_published": course.is_published,
-                "approved_employees_count": approved_count,
-                "active_calls": active_calls_count,
+                "enrolled_count": approved_count,
+                "upcoming_sessions": upcoming_sessions,
                 "materials_count": materials_count,
+                "cohort_names": cohort_names,
                 "created_at": course.created_at,
             })
         
@@ -226,44 +268,75 @@ class ProfessorService:
         if not professor:
             return None
         
-        query = select(Course).where(
-            and_(
-                Course.id == course_id,
-                Course.professor_id == professor.id
+        assigned_to_course = (
+            await session.execute(
+                select(Cohort.id)
+                .join(CohortProfessorAssignment, CohortProfessorAssignment.cohort_id == Cohort.id)
+                .where(
+                    and_(
+                        CohortProfessorAssignment.professor_id == professor.id,
+                        Cohort.course_id == course_id,
+                    )
+                )
+                .limit(1)
             )
-        )
+        ).scalar_one_or_none()
+
+        if not assigned_to_course:
+            return None
+
+        query = select(Course).where(Course.id == course_id)
         result = await session.execute(query)
         course = result.scalar_one_or_none()
         
         if not course:
             return None
         
-        # Get stats - updated for Call for Applicants workflow
+        # Get calls mapped from assigned cohorts for this course
+        cohort_call_ids = list(
+            (
+                await session.execute(
+                    select(distinct(Cohort.call_id))
+                    .join(CohortProfessorAssignment, CohortProfessorAssignment.cohort_id == Cohort.id)
+                    .where(
+                        and_(
+                            CohortProfessorAssignment.professor_id == professor.id,
+                            Cohort.course_id == course.id,
+                        )
+                    )
+                )
+            ).scalars().all()
+        )
+
         # Count approved employees
         approved_query = (
             select(func.count(EmployeeSubmission.id))
             .join(CompanyApplication, EmployeeSubmission.company_application_id == CompanyApplication.id)
-            .join(CallForApplicants, CompanyApplication.call_id == CallForApplicants.id)
             .where(
                 and_(
-                    CallForApplicants.course_id == course.id,
+                    CompanyApplication.call_id.in_(cohort_call_ids),
                     EmployeeSubmission.status == EmployeeSubmissionStatus.APPROVED
                 )
             )
         )
         approved_count = (await session.execute(approved_query)).scalar() or 0
-        
-        # Count active calls
-        active_calls_query = (
-            select(func.count(CallForApplicants.id))
+
+        # Count upcoming sessions
+        from datetime import date
+        upcoming_sessions_query = (
+            select(func.count(CohortSession.id))
+            .join(Cohort, Cohort.id == CohortSession.cohort_id)
+            .join(CohortProfessorAssignment, CohortProfessorAssignment.cohort_id == Cohort.id)
             .where(
                 and_(
-                    CallForApplicants.course_id == course.id,
-                    CallForApplicants.status == CallStatus.OPEN
+                    CohortProfessorAssignment.professor_id == professor.id,
+                    Cohort.course_id == course.id,
+                    CohortSession.professor_id == professor.id,
+                    CohortSession.session_date >= date.today(),
                 )
             )
         )
-        active_calls_count = (await session.execute(active_calls_query)).scalar() or 0
+        upcoming_sessions = (await session.execute(upcoming_sessions_query)).scalar() or 0
         
         materials_query = select(func.count(CourseMaterial.id)).where(
             CourseMaterial.course_id == course.id
@@ -287,8 +360,8 @@ class ProfessorService:
             "max_seats": course.max_seats,
             "image_path": course.image_path,
             "is_published": course.is_published,
-            "approved_employees_count": approved_count,
-            "active_calls": active_calls_count,
+            "enrolled_count": approved_count,
+            "upcoming_sessions": upcoming_sessions,
             "materials_count": materials_count,
             "created_at": course.created_at,
         }
@@ -304,11 +377,16 @@ class ProfessorService:
         if not professor:
             return False
         
-        query = select(Course.id).where(
-            and_(
-                Course.id == course_id,
-                Course.professor_id == professor.id
+        query = (
+            select(Cohort.id)
+            .join(CohortProfessorAssignment, CohortProfessorAssignment.cohort_id == Cohort.id)
+            .where(
+                and_(
+                    CohortProfessorAssignment.professor_id == professor.id,
+                    Cohort.course_id == course_id,
+                )
             )
+            .limit(1)
         )
         result = await session.execute(query)
         return result.scalar_one_or_none() is not None
@@ -441,7 +519,7 @@ class ProfessorService:
     @staticmethod
     async def get_enrolled_employees(
         course_id: int,
-        call_id: Optional[int],
+        session_id: Optional[int],
         session: AsyncSession
     ) -> List[dict]:
         """
@@ -456,17 +534,18 @@ class ProfessorService:
                 selectinload(EmployeeSubmission.company_application).selectinload(CompanyApplication.call),
             )
             .join(CompanyApplication, EmployeeSubmission.company_application_id == CompanyApplication.id)
-            .join(CallForApplicants, CompanyApplication.call_id == CallForApplicants.id)
+            .join(Cohort, Cohort.call_id == CompanyApplication.call_id)
             .where(
                 and_(
-                    CallForApplicants.course_id == course_id,
+                    Cohort.course_id == course_id,
+                    CompanyApplication.status == ApplicationStatus.APPROVED,
                     EmployeeSubmission.status == EmployeeSubmissionStatus.APPROVED
                 )
             )
         )
         
-        if call_id:
-            query = query.where(CallForApplicants.id == call_id)
+        if session_id:
+            query = query.where(CompanyApplication.call_id == session_id)
         
         query = query.order_by(EmployeeSubmission.created_at.desc())
         
@@ -478,20 +557,15 @@ class ProfessorService:
             employee = submission.employee
             company_name = None
             if submission.company_application and submission.company_application.company:
-                company_name = submission.company_application.company.company_name
-            
-            call_title = None
-            if submission.company_application and submission.company_application.call:
-                call_title = submission.company_application.call.title
+                company_name = submission.company_application.company.name
             
             employees.append({
                 "id": employee.id,
                 "fullname": employee.user.fullname if employee.user else "Unknown",
                 "email": employee.user.email if employee.user else "",
                 "company_name": company_name,
-                "call_title": call_title,
-                "submitted_at": submission.created_at,
-                "status": submission.status.value if submission.status else None,
+                "enrolled_at": submission.created_at,
+                "document_status": submission.status.value if submission.status else None,
             })
         
         return employees

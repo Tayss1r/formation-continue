@@ -1,4 +1,4 @@
-import { apiClient, API_BASE_URL, getAccessToken } from "./api";
+import { apiClient, API_BASE_URL, getAccessToken, refreshAccessToken } from "./api";
 
 export interface CourseMaterial {
   id: number;
@@ -50,21 +50,36 @@ export function getMaterialDownloadUrl(materialId: number): string {
  * Uses fetch with auth headers and creates a blob download
  */
 export async function downloadMaterial(materialId: number, fileName?: string): Promise<void> {
-  const token = getAccessToken();
-  
-  if (!token) {
-    throw new Error("Not authenticated");
-  }
-  
   const url = getMaterialDownloadUrl(materialId);
-  
-  const response = await fetch(url, {
+
+  let token = getAccessToken();
+  if (!token) {
+    const refreshed = await refreshAccessToken();
+    if (!refreshed) {
+      throw new Error("Not authenticated");
+    }
+    token = getAccessToken();
+  }
+
+  let response = await fetch(url, {
     method: "GET",
-    headers: {
-      "Authorization": `Bearer ${token}`,
-    },
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
     credentials: "include",
   });
+
+  // Retry once if token is expired.
+  if (response.status === 401) {
+    const refreshed = await refreshAccessToken();
+    if (!refreshed) {
+      throw new Error("Not authenticated");
+    }
+    token = getAccessToken();
+    response = await fetch(url, {
+      method: "GET",
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      credentials: "include",
+    });
+  }
   
   if (!response.ok) {
     const errorText = await response.text();

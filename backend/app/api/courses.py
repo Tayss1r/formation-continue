@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..db.database import get_session
 from ..db.models import User, UserRole, Department
-from ..dependencies import get_current_user, get_staff_user, RoleChecker
+from ..dependencies import get_current_user, get_course_manager_user, RoleChecker
 from ..schemas.course_schema import (
     CourseCreate,
     CourseUpdate,
@@ -47,7 +47,7 @@ async def get_departments():
 @course_router.get("/professors", response_model=ProfessorListResponse)
 async def get_professors(
     department: Optional[str] = Query(None, description="Filter by department"),
-    current_user: User = Depends(get_staff_user),
+    current_user: User = Depends(get_course_manager_user),
     session: AsyncSession = Depends(get_session)
 ):
     """
@@ -129,19 +129,27 @@ async def get_course_details(
 async def get_my_courses(
     page: int = Query(1, ge=1),
     per_page: int = Query(10, ge=1, le=50),
-    current_user: User = Depends(get_staff_user),
+    current_user: User = Depends(get_course_manager_user),
     session: AsyncSession = Depends(get_session)
 ):
     """
-    Get all courses created by the current staff user.
-    Staff only.
+    Get courses for course managers.
+    - Staff: only their own courses.
+    - Coordinator/Admin: all courses.
     """
-    courses, total = await CourseService.get_staff_courses(
-        session=session,
-        user_id=current_user.id,
-        page=page,
-        per_page=per_page
-    )
+    if current_user.role in [UserRole.COORDINATOR.value, UserRole.ADMIN.value]:
+        courses, total = await CourseService.get_all_courses_admin(
+            session=session,
+            page=page,
+            per_page=per_page
+        )
+    else:
+        courses, total = await CourseService.get_staff_courses(
+            session=session,
+            user_id=current_user.id,
+            page=page,
+            per_page=per_page
+        )
     
     total_pages = math.ceil(total / per_page) if total > 0 else 1
     
@@ -157,7 +165,7 @@ async def get_my_courses(
 @course_router.get("/staff/course/{course_id}", response_model=CourseOut)
 async def get_staff_course_details(
     course_id: int,
-    current_user: User = Depends(get_staff_user),
+    current_user: User = Depends(get_course_manager_user),
     session: AsyncSession = Depends(get_session)
 ):
     """
@@ -172,8 +180,8 @@ async def get_staff_course_details(
             detail="Course not found"
         )
     
-    # Staff can only see their own courses, admin can see all
-    if current_user.role != UserRole.ADMIN.value and course.created_by_id != current_user.id:
+    # Staff can only see their own courses, coordinator/admin can see all
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.COORDINATOR.value] and course.created_by_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to view this course"
@@ -185,7 +193,7 @@ async def get_staff_course_details(
 @course_router.get("/staff/course/{course_id}/editability", response_model=CourseEditabilityOut)
 async def get_course_editability(
     course_id: int,
-    current_user: User = Depends(get_staff_user),
+    current_user: User = Depends(get_course_manager_user),
     session: AsyncSession = Depends(get_session)
 ):
     """
@@ -202,7 +210,7 @@ async def get_course_editability(
         )
     
     # Check permissions
-    if current_user.role != UserRole.ADMIN.value and course.created_by_id != current_user.id:
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.COORDINATOR.value] and course.created_by_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to view this course"
@@ -228,13 +236,13 @@ async def create_course(
     learning_outcomes: Optional[str] = Form(None),  # JSON string array
     is_published: bool = Form(True),
     image: Optional[UploadFile] = File(None),
-    current_user: User = Depends(get_staff_user),
+    current_user: User = Depends(get_course_manager_user),
     session: AsyncSession = Depends(get_session)
 ):
     """
     Create a new course (template) with optional image upload.
     Course dates are managed via availability slots, not on the course itself.
-    Staff only.
+    Staff/coordinator/admin only.
     
     learning_outcomes should be a JSON string array, e.g.: '["item1", "item2"]'
     """
@@ -290,13 +298,13 @@ async def update_course(
     learning_outcomes: Optional[str] = Form(None),  # JSON string array
     is_published: Optional[bool] = Form(None),
     image: Optional[UploadFile] = File(None),
-    current_user: User = Depends(get_staff_user),
+    current_user: User = Depends(get_course_manager_user),
     session: AsyncSession = Depends(get_session)
 ):
     """
     Update an existing course (template). Only the course creator or admin can update.
     Course dates are managed via availability slots.
-    Staff only.
+    Staff/coordinator/admin only.
     
     BUSINESS RULE: Price and max_seats cannot be modified if there are existing bookings.
     learning_outcomes should be a JSON string array, e.g.: '["item1", "item2"]'
@@ -309,17 +317,17 @@ async def update_course(
             detail="Course not found"
         )
     
-    # Check permissions: only creator or admin can update
-    if current_user.role != UserRole.ADMIN.value and course.created_by_id != current_user.id:
+    # Check permissions: staff can only update own courses, coordinator/admin can update all
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.COORDINATOR.value] and course.created_by_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to update this course"
         )
     
-    # BUSINESS RULE: Check if price or seats are being modified when bookings exist
+    # BUSINESS RULE: Check if price or seats are being modified when applications exist
     if price is not None or max_seats is not None:
-        has_bookings = await CourseService.course_has_bookings(course_id, session)
-        if has_bookings:
+        has_applications = await CourseService.course_has_applications(course_id, session)
+        if has_applications:
             if (price is not None and price != course.price) or \
                (max_seats is not None and max_seats != course.max_seats):
                 raise CourseHasBookings()
@@ -362,12 +370,13 @@ async def update_course(
 @course_router.delete("/{course_id}", response_model=CourseDeleteResponse)
 async def delete_course(
     course_id: int,
-    current_user: User = Depends(get_staff_user),
+    current_user: User = Depends(get_course_manager_user),
     session: AsyncSession = Depends(get_session)
 ):
     """
-    Delete a course. Only the course creator or admin can delete.
-    Staff only.
+    Delete a course.
+    - Staff can delete only their own courses.
+    - Coordinator/Admin can delete all courses.
     """
     course = await CourseService.get_course_by_id(course_id, session, include_relations=False)
     
@@ -377,8 +386,8 @@ async def delete_course(
             detail="Course not found"
         )
     
-    # Check permissions: only creator or admin can delete
-    if current_user.role != UserRole.ADMIN.value and course.created_by_id != current_user.id:
+    # Check permissions
+    if current_user.role not in [UserRole.ADMIN.value, UserRole.COORDINATOR.value] and course.created_by_id != current_user.id:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="You don't have permission to delete this course"

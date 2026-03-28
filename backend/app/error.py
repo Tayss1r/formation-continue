@@ -241,6 +241,11 @@ class InvalidDepartment(CustomException):
     pass
 
 
+class DuplicateCallReference(CustomException):
+    """Call reference number already exists"""
+    pass
+
+
 class CallNotOpenForApplications(CustomException):
     """Call is not open for applications"""
     pass
@@ -799,6 +804,17 @@ def register_all_errors(app: FastAPI):
             initial_detail={
                 "message": "Département invalide",
                 "error_code": "invalid_department",
+            },
+        ),
+    )
+
+    app.add_exception_handler(
+        DuplicateCallReference,
+        create_exception_handler(
+            status_code=status.HTTP_409_CONFLICT,
+            initial_detail={
+                "message": "Un appel avec cette référence existe déjà",
+                "error_code": "duplicate_call_reference",
             },
         ),
     )

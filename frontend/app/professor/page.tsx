@@ -9,21 +9,98 @@ import {
   FileText,
   ArrowRight,
   Loader2,
+  Plus,
+  Pencil,
+  Trash2,
+  MapPin,
 } from "lucide-react";
 import { getProfessorDashboard } from "@/lib/professor";
+import {
+  createProfessorCohortSession,
+  deleteProfessorCohortSession,
+  getProfessorAssignedCohorts,
+  getProfessorCohortSessions,
+  updateProfessorCohortSession,
+} from "@/lib/cohorts";
 import { getImageUrl } from "@/lib/config";
 import type { ProfessorDashboard } from "@/types/professor";
+import type {
+  CohortSession,
+  CohortSessionPayload,
+  ProfessorAssignedCohort,
+} from "@/types/cohort";
+
+interface SessionFormState {
+  title: string;
+  session_date: string;
+  start_time: string;
+  end_time: string;
+  location: string;
+}
+
+const emptySessionForm: SessionFormState = {
+  title: "",
+  session_date: "",
+  start_time: "09:00",
+  end_time: "10:00",
+  location: "",
+};
 
 export default function ProfessorDashboardPage() {
   const [dashboard, setDashboard] = useState<ProfessorDashboard | null>(null);
+  const [cohorts, setCohorts] = useState<ProfessorAssignedCohort[]>([]);
+  const [sessionsByCohort, setSessionsByCohort] = useState<Record<number, CohortSession[]>>({});
+  const [sessionForms, setSessionForms] = useState<Record<number, SessionFormState>>({});
+  const [editingSessionIdByCohort, setEditingSessionIdByCohort] = useState<Record<number, number | null>>({});
+  const [loadingSessionsByCohort, setLoadingSessionsByCohort] = useState<Record<number, boolean>>({});
+  const [savingSessionByCohort, setSavingSessionByCohort] = useState<Record<number, boolean>>({});
+  const [deletingSessionId, setDeletingSessionId] = useState<number | null>(null);
+  const [sessionErrorByCohort, setSessionErrorByCohort] = useState<Record<number, string | null>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     async function fetchDashboard() {
       try {
-        const data = await getProfessorDashboard();
+        const [data, cohortsRes] = await Promise.all([
+          getProfessorDashboard(),
+          getProfessorAssignedCohorts(),
+        ]);
         setDashboard(data);
+        setCohorts(cohortsRes.cohorts);
+
+        const sessionsEntries = await Promise.allSettled(
+          cohortsRes.cohorts.map(async (cohort) => {
+            const response = await getProfessorCohortSessions(cohort.id);
+            return [cohort.id, response.sessions] as const;
+          })
+        );
+        const sessionsMap: Record<number, CohortSession[]> = {};
+        const formsMap: Record<number, SessionFormState> = {};
+        const editingMap: Record<number, number | null> = {};
+        const errorMap: Record<number, string | null> = {};
+
+        for (let index = 0; index < cohortsRes.cohorts.length; index++) {
+          const cohort = cohortsRes.cohorts[index];
+          const result = sessionsEntries[index];
+
+          formsMap[cohort.id] = { ...emptySessionForm };
+          editingMap[cohort.id] = null;
+
+          if (result.status === "fulfilled") {
+            const [, sessions] = result.value;
+            sessionsMap[cohort.id] = sessions;
+            errorMap[cohort.id] = null;
+          } else {
+            sessionsMap[cohort.id] = [];
+            errorMap[cohort.id] = "Impossible de charger les sessions pour ce cohort";
+          }
+        }
+
+        setSessionsByCohort(sessionsMap);
+        setSessionForms(formsMap);
+        setEditingSessionIdByCohort(editingMap);
+        setSessionErrorByCohort(errorMap);
       } catch (err) {
         console.error("Failed to fetch dashboard:", err);
         setError("Impossible de charger le tableau de bord");
@@ -52,6 +129,139 @@ export default function ProfessorDashboardPage() {
 
   if (!dashboard) {
     return null;
+  }
+
+  function getErrorMessage(err: unknown, fallback: string): string {
+    if (err && typeof err === "object" && "message" in err) {
+      const message = (err as { message?: unknown }).message;
+      if (typeof message === "string" && message.trim()) {
+        return message;
+      }
+    }
+    if (err && typeof err === "object" && "detail" in err) {
+      const detail = (err as { detail?: unknown }).detail;
+      if (typeof detail === "string" && detail.trim()) {
+        return detail;
+      }
+    }
+    return fallback;
+  }
+
+  function updateSessionForm(cohortId: number, patch: Partial<SessionFormState>) {
+    setSessionForms((prev) => ({
+      ...prev,
+      [cohortId]: {
+        ...(prev[cohortId] || emptySessionForm),
+        ...patch,
+      },
+    }));
+  }
+
+  function validateSessionForm(cohort: ProfessorAssignedCohort, form: SessionFormState): string | null {
+    if (!form.title.trim()) return "Le titre de la session est requis";
+    if (!form.session_date) return "La date de session est requise";
+    if (!form.start_time || !form.end_time) return "Les heures sont requises";
+    if (form.start_time >= form.end_time) return "L'heure de debut doit etre avant l'heure de fin";
+
+    if (form.session_date < cohort.training_start_date || form.session_date > cohort.training_end_date) {
+      return "La session doit etre planifiee dans la periode de formation du cohort";
+    }
+    if (form.start_time < cohort.daily_start_hour || form.end_time > cohort.daily_end_hour) {
+      return "La session doit respecter la marge horaire quotidienne du cohort";
+    }
+
+    return null;
+  }
+
+  async function reloadCohortSessions(cohortId: number) {
+    setLoadingSessionsByCohort((prev) => ({ ...prev, [cohortId]: true }));
+    try {
+      const response = await getProfessorCohortSessions(cohortId);
+      setSessionsByCohort((prev) => ({ ...prev, [cohortId]: response.sessions }));
+    } finally {
+      setLoadingSessionsByCohort((prev) => ({ ...prev, [cohortId]: false }));
+    }
+  }
+
+  async function saveSession(cohort: ProfessorAssignedCohort) {
+    const cohortId = cohort.id;
+    const form = sessionForms[cohortId] || emptySessionForm;
+    const validation = validateSessionForm(cohort, form);
+    if (validation) {
+      setSessionErrorByCohort((prev) => ({ ...prev, [cohortId]: validation }));
+      return;
+    }
+
+    const payload: CohortSessionPayload = {
+      title: form.title.trim(),
+      session_date: form.session_date,
+      start_time: form.start_time,
+      end_time: form.end_time,
+      location: form.location.trim() || undefined,
+    };
+
+    setSavingSessionByCohort((prev) => ({ ...prev, [cohortId]: true }));
+    setSessionErrorByCohort((prev) => ({ ...prev, [cohortId]: null }));
+
+    try {
+      const editingId = editingSessionIdByCohort[cohortId];
+      if (editingId) {
+        await updateProfessorCohortSession(cohortId, editingId, payload);
+      } else {
+        await createProfessorCohortSession(cohortId, payload);
+      }
+
+      await reloadCohortSessions(cohortId);
+      setSessionForms((prev) => ({ ...prev, [cohortId]: { ...emptySessionForm } }));
+      setEditingSessionIdByCohort((prev) => ({ ...prev, [cohortId]: null }));
+    } catch (err) {
+      setSessionErrorByCohort((prev) => ({
+        ...prev,
+        [cohortId]: getErrorMessage(err, "Erreur lors de l'enregistrement de la session"),
+      }));
+    } finally {
+      setSavingSessionByCohort((prev) => ({ ...prev, [cohortId]: false }));
+    }
+  }
+
+  function startEditSession(cohortId: number, item: CohortSession) {
+    setEditingSessionIdByCohort((prev) => ({ ...prev, [cohortId]: item.id }));
+    setSessionForms((prev) => ({
+      ...prev,
+      [cohortId]: {
+        title: item.title,
+        session_date: item.session_date,
+        start_time: item.start_time,
+        end_time: item.end_time,
+        location: item.location || "",
+      },
+    }));
+    setSessionErrorByCohort((prev) => ({ ...prev, [cohortId]: null }));
+  }
+
+  function cancelEditSession(cohortId: number) {
+    setEditingSessionIdByCohort((prev) => ({ ...prev, [cohortId]: null }));
+    setSessionForms((prev) => ({ ...prev, [cohortId]: { ...emptySessionForm } }));
+    setSessionErrorByCohort((prev) => ({ ...prev, [cohortId]: null }));
+  }
+
+  async function removeSession(cohortId: number, sessionId: number) {
+    setDeletingSessionId(sessionId);
+    setSessionErrorByCohort((prev) => ({ ...prev, [cohortId]: null }));
+    try {
+      await deleteProfessorCohortSession(cohortId, sessionId);
+      await reloadCohortSessions(cohortId);
+      if (editingSessionIdByCohort[cohortId] === sessionId) {
+        cancelEditSession(cohortId);
+      }
+    } catch (err) {
+      setSessionErrorByCohort((prev) => ({
+        ...prev,
+        [cohortId]: getErrorMessage(err, "Erreur lors de la suppression de la session"),
+      }));
+    } finally {
+      setDeletingSessionId(null);
+    }
   }
 
   const stats = [
@@ -173,6 +383,144 @@ export default function ProfessorDashboardPage() {
                   </div>
                 </div>
               </Link>
+            ))}
+          </div>
+        )}
+      </div>
+
+      <div className="card-elevated p-6">
+        <h2 className="text-lg font-semibold text-foreground mb-4">My Cohorts</h2>
+        {cohorts.length === 0 ? (
+          <p className="text-muted-foreground text-sm">
+            Aucun cohort assigne pour le moment.
+          </p>
+        ) : (
+          <div className="space-y-6">
+            {cohorts.map((cohort) => (
+              <section key={cohort.id} className="p-4 rounded-xl border border-border bg-muted/20 space-y-4">
+                <div>
+                  <p className="font-medium text-foreground">{cohort.name}</p>
+                  <p className="text-sm text-muted-foreground mt-1">Formation: {cohort.course_title}</p>
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Marge de formation: {cohort.training_start_date} - {cohort.training_end_date} | {cohort.daily_start_hour} - {cohort.daily_end_hour}
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-3">
+                  <input
+                    value={(sessionForms[cohort.id] || emptySessionForm).title}
+                    onChange={(event) => updateSessionForm(cohort.id, { title: event.target.value })}
+                    className="form-input"
+                    placeholder="Titre de session"
+                  />
+                  <input
+                    type="date"
+                    value={(sessionForms[cohort.id] || emptySessionForm).session_date}
+                    min={cohort.training_start_date}
+                    max={cohort.training_end_date}
+                    onChange={(event) => updateSessionForm(cohort.id, { session_date: event.target.value })}
+                    className="form-input"
+                  />
+                  <input
+                    type="time"
+                    value={(sessionForms[cohort.id] || emptySessionForm).start_time}
+                    min={cohort.daily_start_hour}
+                    max={cohort.daily_end_hour}
+                    onChange={(event) => updateSessionForm(cohort.id, { start_time: event.target.value })}
+                    className="form-input"
+                  />
+                  <input
+                    type="time"
+                    value={(sessionForms[cohort.id] || emptySessionForm).end_time}
+                    min={cohort.daily_start_hour}
+                    max={cohort.daily_end_hour}
+                    onChange={(event) => updateSessionForm(cohort.id, { end_time: event.target.value })}
+                    className="form-input"
+                  />
+                  <input
+                    value={(sessionForms[cohort.id] || emptySessionForm).location}
+                    onChange={(event) => updateSessionForm(cohort.id, { location: event.target.value })}
+                    className="form-input"
+                    placeholder="Lieu (optionnel)"
+                  />
+                </div>
+
+                {sessionErrorByCohort[cohort.id] && (
+                  <p className="text-sm text-red-600">{sessionErrorByCohort[cohort.id]}</p>
+                )}
+
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => void saveSession(cohort)}
+                    disabled={!!savingSessionByCohort[cohort.id]}
+                    className="btn-primary inline-flex items-center gap-2"
+                  >
+                    {savingSessionByCohort[cohort.id] ? (
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Plus className="w-4 h-4" />
+                    )}
+                    {editingSessionIdByCohort[cohort.id] ? "Mettre a jour" : "Creer session"}
+                  </button>
+                  {editingSessionIdByCohort[cohort.id] && (
+                    <button onClick={() => cancelEditSession(cohort.id)} className="btn-secondary">
+                      Annuler
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <p className="text-sm font-medium text-foreground">Sessions planifiees</p>
+                  {loadingSessionsByCohort[cohort.id] ? (
+                    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Loader2 className="w-4 h-4 animate-spin" />
+                      Chargement des sessions...
+                    </div>
+                  ) : (sessionsByCohort[cohort.id] || []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">Aucune session pour ce cohort.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {(sessionsByCohort[cohort.id] || []).map((item) => (
+                        <div key={item.id} className="p-3 rounded-lg bg-card border border-border flex items-center justify-between gap-4">
+                          <div>
+                            <p className="font-medium text-foreground">{item.title}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {item.session_date} | {item.start_time} - {item.end_time}
+                            </p>
+                            {item.location && (
+                              <p className="text-xs text-muted-foreground inline-flex items-center gap-1 mt-1">
+                                <MapPin className="w-3 h-3" />
+                                {item.location}
+                              </p>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => startEditSession(cohort.id, item)}
+                              className="btn-secondary inline-flex items-center gap-1"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                              Modifier
+                            </button>
+                            <button
+                              onClick={() => void removeSession(cohort.id, item.id)}
+                              disabled={deletingSessionId === item.id}
+                              className="inline-flex items-center gap-1 px-3 py-2 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
+                            >
+                              {deletingSessionId === item.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Trash2 className="w-3.5 h-3.5" />
+                              )}
+                              Supprimer
+                            </button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </section>
             ))}
           </div>
         )}

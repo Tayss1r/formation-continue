@@ -13,7 +13,7 @@ from sqlalchemy.orm import selectinload
 
 from ..db.models import (
     User, CourseMaterial, Course, EmployeeProfile, Professor,
-    EmployeeSubmission, CompanyApplication, CallForApplicants,
+    EmployeeSubmission, CompanyApplication, Cohort, CohortProfessorAssignment,
     EmployeeSubmissionStatus, ApplicationStatus
 )
 
@@ -50,19 +50,20 @@ class MaterialService:
         if not employee:
             return False
         
-        # Check for approved submission linked to the course
+        # Check for approved submission linked to a call that has a cohort for this course.
         enrollment_query = (
             select(EmployeeSubmission.id)
             .join(CompanyApplication, EmployeeSubmission.company_application_id == CompanyApplication.id)
-            .join(CallForApplicants, CompanyApplication.call_id == CallForApplicants.id)
+            .join(Cohort, Cohort.call_id == CompanyApplication.call_id)
             .where(
                 and_(
                     EmployeeSubmission.employee_id == employee.id,
                     EmployeeSubmission.status == EmployeeSubmissionStatus.APPROVED,
                     CompanyApplication.status == ApplicationStatus.APPROVED,
-                    CallForApplicants.course_id == course_id
+                    Cohort.course_id == course_id
                 )
             )
+            .limit(1)
         )
         result = await session.execute(enrollment_query)
         return result.scalar_one_or_none() is not None
@@ -83,10 +84,10 @@ class MaterialService:
         if not employee:
             return []
         
-        # Get course IDs via approved submissions
+        # Get course IDs through approved calls and their cohorts.
         query = (
-            select(CallForApplicants.course_id)
-            .join(CompanyApplication, CompanyApplication.call_id == CallForApplicants.id)
+            select(Cohort.course_id)
+            .join(CompanyApplication, CompanyApplication.call_id == Cohort.call_id)
             .join(EmployeeSubmission, EmployeeSubmission.company_application_id == CompanyApplication.id)
             .where(
                 and_(
@@ -190,7 +191,14 @@ class MaterialService:
         material_id: int,
         session: AsyncSession
     ) -> bool:
-        """Check if a professor can access a specific material"""
+        """
+        Check if a professor can access a specific material.
+
+        Access is granted when one of these conditions is true:
+        - The professor uploaded the material.
+        - The professor is assigned to a cohort that uses the material's course.
+        - Legacy fallback: the professor is the course owner (course.professor_id).
+        """
         # Get professor profile
         prof_query = select(Professor).where(Professor.user_id == user_id)
         prof_result = await session.execute(prof_query)
@@ -203,8 +211,28 @@ class MaterialService:
         material = await MaterialService.get_material_by_id(material_id, session)
         if not material:
             return False
+
+        # Uploader can always access their own material.
+        if material.uploaded_by_id == user_id:
+            return True
+
+        # Cohort-based access: professor is assigned to at least one cohort using this course.
+        cohort_assignment_query = (
+            select(CohortProfessorAssignment.id)
+            .join(Cohort, Cohort.id == CohortProfessorAssignment.cohort_id)
+            .where(
+                and_(
+                    CohortProfessorAssignment.professor_id == professor.id,
+                    Cohort.course_id == material.course_id,
+                )
+            )
+            .limit(1)
+        )
+        cohort_assignment_result = await session.execute(cohort_assignment_query)
+        if cohort_assignment_result.scalar_one_or_none() is not None:
+            return True
         
-        # Check if professor is assigned to the course
+        # Legacy fallback: check if professor is directly assigned as course owner.
         course_query = select(Course.id).where(
             and_(
                 Course.id == material.course_id,

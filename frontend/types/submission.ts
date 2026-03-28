@@ -75,28 +75,30 @@ export interface AvailableSubmission {
   call_title: string;
   call_reference: string;
   department: string;
-  application_deadline: string;
+  application_deadline?: string;
   employee_required_documents: RequiredDocumentSpec[];
   has_submitted: boolean;
+  submission_id?: number;
+  submission_status?: string;
 }
 
 // Create interface
 export interface SubmissionCreate {
-  application_id: number;
+  company_application_id: number;
 }
 
 // Action interfaces
 export interface SubmissionApprove {
-  notes?: string;
+  review_notes?: string;
 }
 
 export interface SubmissionReject {
-  notes?: string;
+  review_notes?: string;
 }
 
 export interface SubmissionDocumentReview {
-  status: 'approved' | 'rejected' | 'requires_resubmission';
-  rejection_reason?: string;
+  review_status: 'approved' | 'rejected' | 'revision_required';
+  review_notes?: string;
 }
 
 // Response interfaces
@@ -124,15 +126,15 @@ export interface SubmissionDocumentActionResponse {
 export const SUBMISSION_STATUS_LABELS: Record<EmployeeSubmissionStatus, string> = {
   pending: 'En attente',
   submitted: 'Soumise',
+  under_review: 'En révision',
   approved: 'Approuvée',
   rejected: 'Rejetée',
-  withdrawn: 'Retirée',
 };
 
 export const SUBMISSION_STATUS_COLORS: Record<EmployeeSubmissionStatus, string> = {
   pending: 'gray',
   submitted: 'blue',
+  under_review: 'purple',
   approved: 'green',
   rejected: 'red',
-  withdrawn: 'gray',
 };

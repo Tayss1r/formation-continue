@@ -18,53 +18,51 @@ import {
   Info,
 } from "lucide-react";
 import { createCall, publishCall } from "@/lib/calls";
+import { getMyCalls } from "@/lib/coordinator";
 import { ConfirmDialog } from "@/components/coordinator/CoordinatorUI";
 import type { CallCreate, RequiredDocumentSpec, Department } from "@/types/call";
 import { DEPARTMENT_DISPLAY_NAMES } from "@/types/call";
 
 const departments: Department[] = [
   'informatique',
-  'mathematiques',
-  'physique',
-  'biologie',
-  'chimie',
-  'lettres',
-  'economie',
-  'droit',
-  'medecine',
-  'general',
+  'mecanique',
+  'electrique',
+  'civil',
+  'gestion',
 ];
 
 const defaultDocumentTypes = [
-  'company_registration',
-  'tax_certificate',
-  'financial_statement',
-  'authorization_letter',
-  'motivation_letter',
-  'other',
+  'registre de commerce',
+  'certificat fiscal',
+  'états financiers',
+  'lettre d’autorisation',
+  'lettre de motivation',
+  'autre',
 ];
 
 const employeeDocumentTypes = [
   'cv',
-  'diploma',
-  'id_card',
+  'diplôme',
+  'carte d’identité',
   'photo',
-  'motivation_letter',
-  'recommendation_letter',
-  'other',
+  'lettre de motivation',
+  'lettre de recommandation',
+  'autre',
 ];
 
 export default function CreateCallPage() {
   const router = useRouter();
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [dialogError, setDialogError] = useState<string | null>(null);
   const [showPreview, setShowPreview] = useState(false);
+  const [formErrors, setFormErrors] = useState<Partial<Record<keyof CallCreate, string>>>({});
   
   // Form state
   const [formData, setFormData] = useState<Partial<CallCreate>>({
     title: '',
     reference_number: '',
-    department: 'general',
+    department: 'informatique',
     description: '',
     eligibility_criteria: '',
     application_start_date: '',
@@ -84,11 +82,117 @@ export default function CreateCallPage() {
     type: 'draft' | 'publish';
   } | null>(null);
 
+  function normalizeReference(value: string) {
+    return value.trim().toUpperCase();
+  }
+
+  function validateSingleField(
+    field: keyof CallCreate,
+    value: string,
+    nextFormData: Partial<CallCreate>
+  ): string | undefined {
+    if (field === 'title' && !value.trim()) {
+      return "Le titre est requis";
+    }
+    if (field === 'reference_number' && !value.trim()) {
+      return "La référence est requise";
+    }
+    if (field === 'department' && !value.trim()) {
+      return "Le département est requis";
+    }
+    if (field === 'application_start_date') {
+      if (!value) return "La date de début est requise";
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const startDate = new Date(value);
+      if (startDate <= today) {
+        return "La date de début doit être dans le futur (après aujourd'hui)";
+      }
+    }
+    if (field === 'application_deadline') {
+      if (!value) return "La date limite est requise";
+      const startDateValue = nextFormData.application_start_date;
+      if (startDateValue) {
+        const startDate = new Date(startDateValue);
+        const deadline = new Date(value);
+        if (deadline <= startDate) {
+          return "La date limite doit être après la date de début";
+        }
+      }
+    }
+    if (field === 'results_publication_date') {
+      if (!value) return "La date de publication des résultats est requise";
+      const deadlineValue = nextFormData.application_deadline;
+      if (deadlineValue) {
+        const deadline = new Date(deadlineValue);
+        const resultsDate = new Date(value);
+        if (resultsDate <= deadline) {
+          return "La date de publication des résultats doit être après la date limite";
+        }
+      }
+    }
+    return undefined;
+  }
+
+  function validateDocuments(): string | null {
+    for (const doc of companyDocuments) {
+      const type = doc.type.trim();
+      if (!type) {
+        return "Chaque document entreprise doit avoir un type";
+      }
+      if (type === 'autre' && !doc.label.trim()) {
+        return "Le label est requis pour les documents entreprise de type autre";
+      }
+    }
+
+    for (const doc of employeeDocuments) {
+      const type = doc.type.trim();
+      if (!type) {
+        return "Chaque document employé doit avoir un type";
+      }
+      if (type === 'autre' && !doc.label.trim()) {
+        return "Le label est requis pour les documents employé de type autre";
+      }
+    }
+    return null;
+  }
+
+  function validateAll(currentData: Partial<CallCreate>) {
+    const nextErrors: Partial<Record<keyof CallCreate, string>> = {};
+    const requiredFields: Array<keyof CallCreate> = [
+      'title',
+      'reference_number',
+      'department',
+      'application_start_date',
+      'application_deadline',
+      'results_publication_date',
+    ];
+
+    requiredFields.forEach((field) => {
+      const value = String(currentData[field] ?? '');
+      const fieldError = validateSingleField(field, value, currentData);
+      if (fieldError) {
+        nextErrors[field] = fieldError;
+      }
+    });
+
+    const docsError = validateDocuments();
+    return {
+      fieldErrors: nextErrors,
+      firstError:
+        Object.values(nextErrors)[0] ||
+        docsError ||
+        null,
+    };
+  }
+
   // Generate reference number
   function generateReference() {
     const year = new Date().getFullYear();
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-    setFormData(prev => ({ ...prev, reference_number: `CALL-${year}-${random}` }));
+    const generated = `CALL-${year}-${random}`;
+    setFormData((prev) => ({ ...prev, reference_number: generated }));
+    setFormErrors((prev) => ({ ...prev, reference_number: undefined }));
   }
 
   // Handle form changes — clear dependent dates when a parent date changes
@@ -106,9 +210,39 @@ export default function CreateCallPage() {
           updated.results_publication_date = '';
         }
       }
+      if (field === 'reference_number') {
+        updated.reference_number = normalizeReference(value);
+      }
+
+      const fieldValue = String(updated[field] ?? '');
+      const fieldError = validateSingleField(field, fieldValue, updated);
+      const deadlineError = validateSingleField(
+        'application_deadline',
+        String(updated.application_deadline ?? ''),
+        updated
+      );
+      const resultsError = validateSingleField(
+        'results_publication_date',
+        String(updated.results_publication_date ?? ''),
+        updated
+      );
+
+      setFormErrors((prevErrors) => ({
+        ...prevErrors,
+        [field]: fieldError,
+        application_deadline: deadlineError,
+        results_publication_date: resultsError,
+      }));
       return updated;
     });
     setError(null);
+    setDialogError(null);
+  }
+
+  function handleBlur(field: keyof CallCreate) {
+    const value = String(formData[field] ?? '');
+    const fieldError = validateSingleField(field, value, formData);
+    setFormErrors((prev) => ({ ...prev, [field]: fieldError }));
   }
 
   // Add company document
@@ -130,9 +264,15 @@ export default function CreateCallPage() {
   function updateCompanyDocument(index: number, field: keyof RequiredDocumentSpec, value: unknown) {
     setCompanyDocuments(prev => {
       const updated = [...prev];
-      updated[index] = { ...updated[index], [field]: value };
+      const nextDoc = { ...updated[index], [field]: value };
+      if (field === 'type' && typeof value === 'string' && value !== 'autre') {
+        nextDoc.label = value;
+      }
+      updated[index] = nextDoc;
       return updated;
     });
+    setError(null);
+    setDialogError(null);
   }
 
   // Remove company document
@@ -162,6 +302,8 @@ export default function CreateCallPage() {
       updated[index] = { ...updated[index], [field]: value };
       return updated;
     });
+    setError(null);
+    setDialogError(null);
   }
 
   // Remove employee document
@@ -179,73 +321,64 @@ export default function CreateCallPage() {
     : deadlineMin;
 
   // Validation
-  function validate(): string | null {
-    if (!formData.title?.trim()) return "Le titre est requis";
-    if (!formData.reference_number?.trim()) return "La référence est requise";
-    if (!formData.department) return "Le département est requis";
-    if (!formData.application_start_date) return "La date de début est requise";
-    if (!formData.application_deadline) return "La date limite est requise";
-    if (!formData.results_publication_date) return "La date de publication des résultats est requise";
-
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const startDate = new Date(formData.application_start_date);
-    const deadline = new Date(formData.application_deadline);
-
-    if (startDate <= today) {
-      return "La date de début doit être dans le futur (après aujourd'hui)";
-    }
-    
-    if (deadline <= startDate) {
-      return "La date limite doit être après la date de début";
-    }
-    
-    if (formData.results_publication_date) {
-      const resultsDate = new Date(formData.results_publication_date);
-      if (resultsDate <= deadline) {
-        return "La date de publication des résultats doit être après la date limite";
-      }
-    }
-
-    // Validate documents
-    for (const doc of companyDocuments) {
-      if (!doc.type.trim() || !doc.label.trim()) {
-        return "Tous les documents entreprise doivent avoir un type et un label";
-      }
-    }
-
-    for (const doc of employeeDocuments) {
-      if (!doc.type.trim() || !doc.label.trim()) {
-        return "Tous les documents employé doivent avoir un type et un label";
-      }
-    }
-
-    return null;
-  }
-
   // Submit form
   async function handleSubmit(publish: boolean = false) {
-    const validationError = validate();
-    if (validationError) {
-      setError(validationError);
+    const normalizedData: Partial<CallCreate> = {
+      ...formData,
+      reference_number: normalizeReference(formData.reference_number || ''),
+    };
+
+    const validation = validateAll(normalizedData);
+    setFormErrors(validation.fieldErrors);
+    if (validation.firstError) {
+      setError(validation.firstError);
+      if (publish) {
+        setDialogError(validation.firstError);
+      }
       return;
     }
 
     setIsSubmitting(true);
     setError(null);
+    setDialogError(null);
 
     try {
+      const existingCalls = await getMyCalls();
+      const duplicate = existingCalls.calls.some(
+        (call) => call.reference_number.trim().toUpperCase() === normalizedData.reference_number
+      );
+      if (duplicate) {
+        const duplicateMessage = "Un appel avec cette référence existe déjà";
+        setError(duplicateMessage);
+        if (publish) {
+          setDialogError(duplicateMessage);
+        }
+        return;
+      }
+
+      const normalizedCompanyDocs = companyDocuments.map((doc) => ({
+        ...doc,
+        type: doc.type.trim(),
+        label: doc.type.trim() === 'autre' ? doc.label.trim() : doc.type.trim(),
+      }));
+
+      const normalizedEmployeeDocs = employeeDocuments.map((doc) => ({
+        ...doc,
+        type: doc.type.trim(),
+        label: doc.type.trim() === 'autre' ? doc.label.trim() : doc.type.trim(),
+      }));
+
       const data: CallCreate = {
-        title: formData.title!,
-        reference_number: formData.reference_number!,
-        department: formData.department as Department,
-        description: formData.description || undefined,
-        eligibility_criteria: formData.eligibility_criteria || undefined,
-        application_start_date: formData.application_start_date!,
-        application_deadline: formData.application_deadline!,
-        results_publication_date: formData.results_publication_date || undefined,
-        required_documents: companyDocuments.length > 0 ? companyDocuments : undefined,
-        employee_required_documents: employeeDocuments.length > 0 ? employeeDocuments : undefined,
+        title: normalizedData.title!,
+        reference_number: normalizedData.reference_number!,
+        department: normalizedData.department as Department,
+        description: normalizedData.description || undefined,
+        eligibility_criteria: normalizedData.eligibility_criteria || undefined,
+        application_start_date: normalizedData.application_start_date!,
+        application_deadline: normalizedData.application_deadline!,
+        results_publication_date: normalizedData.results_publication_date || undefined,
+        required_documents: normalizedCompanyDocs.length > 0 ? normalizedCompanyDocs : undefined,
+        employee_required_documents: normalizedEmployeeDocs.length > 0 ? normalizedEmployeeDocs : undefined,
       };
 
       const response = await createCall(data);
@@ -255,6 +388,7 @@ export default function CreateCallPage() {
       }
 
       router.push(`/coordinator/calls/${response.call.id}`);
+      setConfirmDialog(null);
     } catch (err: unknown) {
       console.error("Error creating call:", err);
       let errorMessage = 'Erreur lors de la création';
@@ -273,14 +407,16 @@ export default function CreateCallPage() {
         }
       }
       setError(errorMessage);
+      if (publish) {
+        setDialogError(errorMessage);
+      }
     } finally {
       setIsSubmitting(false);
-      setConfirmDialog(null);
     }
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-6">
+    <div className="max-w-[1400px] mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link
@@ -325,9 +461,13 @@ export default function CreateCallPage() {
                 type="text"
                 value={formData.title}
                 onChange={(e) => handleChange('title', e.target.value)}
+                onBlur={() => handleBlur('title')}
                 placeholder="Ex: Appel à candidatures - Formation en management"
                 className="form-input w-full"
               />
+              {formErrors.title && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{formErrors.title}</p>
+              )}
             </div>
 
             <div>
@@ -339,6 +479,7 @@ export default function CreateCallPage() {
                   type="text"
                   value={formData.reference_number}
                   onChange={(e) => handleChange('reference_number', e.target.value)}
+                  onBlur={() => handleBlur('reference_number')}
                   placeholder="CALL-2026-XXXXXX"
                   className="form-input flex-1"
                 />
@@ -350,6 +491,9 @@ export default function CreateCallPage() {
                   Générer
                 </button>
               </div>
+              {formErrors.reference_number && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{formErrors.reference_number}</p>
+              )}
             </div>
 
             <div>
@@ -359,6 +503,7 @@ export default function CreateCallPage() {
               <select
                 value={formData.department}
                 onChange={(e) => handleChange('department', e.target.value)}
+                onBlur={() => handleBlur('department')}
                 className="form-input appearance-none w-full"
               >
                 {departments.map((dept) => (
@@ -367,36 +512,41 @@ export default function CreateCallPage() {
                   </option>
                 ))}
               </select>
+              {formErrors.department && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{formErrors.department}</p>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Description */}
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1.5">
-            Description
-          </label>
-          <textarea
-            value={formData.description}
-            onChange={(e) => handleChange('description', e.target.value)}
-            placeholder="Décrivez l'objet de cet appel à candidatures..."
-            rows={4}
-            className="form-input form-textarea w-full"
-          />
-        </div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          {/* Description */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">
+              Description
+            </label>
+            <textarea
+              value={formData.description}
+              onChange={(e) => handleChange('description', e.target.value)}
+              placeholder="Décrivez l'objet de cet appel à candidatures..."
+              rows={5}
+              className="form-input form-textarea w-full"
+            />
+          </div>
 
-        {/* Eligibility */}
-        <div>
-          <label className="block text-sm font-medium text-foreground mb-1.5">
-            Critères d'éligibilité
-          </label>
-          <textarea
-            value={formData.eligibility_criteria}
-            onChange={(e) => handleChange('eligibility_criteria', e.target.value)}
-            placeholder="Définissez les critères que les entreprises doivent respecter..."
-            rows={3}
-            className="form-input form-textarea w-full"
-          />
+          {/* Eligibility */}
+          <div>
+            <label className="block text-sm font-medium text-foreground mb-1.5">
+              Critères d'éligibilité
+            </label>
+            <textarea
+              value={formData.eligibility_criteria}
+              onChange={(e) => handleChange('eligibility_criteria', e.target.value)}
+              placeholder="Définissez les critères que les entreprises doivent respecter..."
+              rows={5}
+              className="form-input form-textarea w-full"
+            />
+          </div>
         </div>
 
         {/* Dates */}
@@ -416,9 +566,13 @@ export default function CreateCallPage() {
                 value={formData.application_start_date}
                 min={todayStr}
                 onChange={(e) => handleChange('application_start_date', e.target.value)}
+                onBlur={() => handleBlur('application_start_date')}
                 className="form-input w-full"
               />
               <p className="text-xs text-muted-foreground mt-1">Doit être après aujourd'hui</p>
+              {formErrors.application_start_date && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{formErrors.application_start_date}</p>
+              )}
             </div>
 
             <div>
@@ -430,9 +584,13 @@ export default function CreateCallPage() {
                 value={formData.application_deadline}
                 min={deadlineMin}
                 onChange={(e) => handleChange('application_deadline', e.target.value)}
+                onBlur={() => handleBlur('application_deadline')}
                 className="form-input w-full"
               />
               <p className="text-xs text-muted-foreground mt-1">Doit être après la date de début</p>
+              {formErrors.application_deadline && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{formErrors.application_deadline}</p>
+              )}
             </div>
 
             <div>
@@ -444,115 +602,135 @@ export default function CreateCallPage() {
                 value={formData.results_publication_date}
                 min={resultsMin}
                 onChange={(e) => handleChange('results_publication_date', e.target.value)}
+                onBlur={() => handleBlur('results_publication_date')}
                 className="form-input w-full"
               />
               <p className="text-xs text-muted-foreground mt-1">Doit être après la date limite</p>
+              {formErrors.results_publication_date && (
+                <p className="mt-1 text-xs text-red-600 dark:text-red-400">{formErrors.results_publication_date}</p>
+              )}
             </div>
           </div>
         </div>
 
-        {/* Company Documents */}
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-primary-500" />
-              Documents requis (Entreprise)
-            </h2>
-            <button
-              type="button"
-              onClick={addCompanyDocument}
-              className="inline-flex items-center gap-1.5 text-sm text-primary-600 dark:text-primary-400 hover:underline"
-            >
-              <Plus className="w-4 h-4" />
-              Ajouter
-            </button>
-          </div>
-
-          {companyDocuments.length === 0 ? (
-            <div className="text-center py-6 bg-muted/50 rounded-xl border-2 border-dashed border-border">
-              <FileText className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
-              <p className="text-sm text-muted-foreground">Aucun document requis</p>
+        <div className="grid grid-cols-1 2xl:grid-cols-2 gap-6">
+          {/* Company Documents */}
+          <div>
+            <div className="flex items-center justify-between mb-4">
+              <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
+                <Building2 className="w-5 h-5 text-primary-500" />
+                Documents requis (Entreprise)
+              </h2>
               <button
                 type="button"
                 onClick={addCompanyDocument}
-                className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:underline"
+                className="inline-flex items-center gap-1.5 text-sm text-primary-600 dark:text-primary-400 hover:underline"
               >
-                Ajouter un document
+                <Plus className="w-4 h-4" />
+                Ajouter
               </button>
             </div>
-          ) : (
-            <div className="space-y-3">
-              {companyDocuments.map((doc, index) => (
-                <div key={index} className="p-4 bg-muted/50 rounded-xl border border-border">
-                  <div className="flex items-start gap-4">
-                    <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">
-                          Type
+            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg mb-4">
+            <div className="flex gap-2">
+              <Info className="w-4 h-4 text-blue-500 flex-shrink-0 mt-0.5" />
+              <p className="text-sm text-blue-700 dark:text-blue-400">
+                Ces documents seront demandés aux entreprises pour vérifier.
+              </p>
+            </div>
+          </div>
+
+            {companyDocuments.length === 0 ? (
+              <div className="text-center py-6 bg-muted/50 rounded-xl border-2 border-dashed border-border">
+                <FileText className="w-8 h-8 text-muted-foreground mx-auto mb-2" />
+                <p className="text-sm text-muted-foreground">Aucun document requis</p>
+                <button
+                  type="button"
+                  onClick={addCompanyDocument}
+                  className="mt-2 text-sm text-primary-600 dark:text-primary-400 hover:underline"
+                >
+                  Ajouter un document
+                </button>
+              </div>
+              
+            ) : (
+              <div className="space-y-3">
+                {companyDocuments.map((doc, index) => (
+                  <div key={index} className="p-4 bg-muted/50 rounded-xl border border-border">
+                    <div className="flex items-start gap-4">
+                      <div className="flex-1 grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
+                            Type
+                          </label>
+                          <select
+                            value={doc.type}
+                            onChange={(e) => updateCompanyDocument(index, 'type', e.target.value)}
+                            className="form-input text-sm w-full appearance-none"
+                          >
+                            <option value="">Sélectionner...</option>
+                            {defaultDocumentTypes.map((type) => (
+                              <option key={type} value={type}>{type}</option>
+                            ))}
+                          </select>
+                        </div>
+                        {doc.type === 'autre' ? (
+                          <div>
+                            <label className="block text-xs font-medium text-muted-foreground mb-1">
+                              Label
+                            </label>
+                            <input
+                              type="text"
+                              value={doc.label}
+                              onChange={(e) => updateCompanyDocument(index, 'label', e.target.value)}
+                              placeholder="Ex: Justificatif spécifique"
+                              className="form-input text-sm w-full"
+                            />
+                          </div>
+                        ) : (
+                          <div className="flex items-end">
+                            <p className="text-xs text-muted-foreground">Le label reprend automatiquement le type sélectionné.</p>
+                          </div>
+                        )}
+                        <div>
+                          <label className="block text-xs font-medium text-muted-foreground mb-1">
+                            Description
+                          </label>
+                          <input
+                            type="text"
+                            value={doc.description || ''}
+                            onChange={(e) => updateCompanyDocument(index, 'description', e.target.value)}
+                            placeholder="Description optionnelle"
+                            className="form-input text-sm w-full"
+                          />
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <label className="flex items-center gap-2 text-sm">
+                          <input
+                            type="checkbox"
+                            checked={doc.required}
+                            onChange={(e) => updateCompanyDocument(index, 'required', e.target.checked)}
+                            className="w-4 h-4 rounded border-border text-primary-600"
+                          />
+                          Requis
                         </label>
-                        <select
-                          value={doc.type}
-                          onChange={(e) => updateCompanyDocument(index, 'type', e.target.value)}
-                          className="form-input text-sm w-full appearance-none"
+                        <button
+                          type="button"
+                          onClick={() => removeCompanyDocument(index)}
+                          className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
                         >
-                          <option value="">Sélectionner...</option>
-                          {defaultDocumentTypes.map((type) => (
-                            <option key={type} value={type}>{type}</option>
-                          ))}
-                        </select>
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-                      <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">
-                          Label
-                        </label>
-                        <input
-                          type="text"
-                          value={doc.label}
-                          onChange={(e) => updateCompanyDocument(index, 'label', e.target.value)}
-                          placeholder="Ex: Registre de commerce"
-                          className="form-input text-sm w-full"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-xs font-medium text-muted-foreground mb-1">
-                          Description
-                        </label>
-                        <input
-                          type="text"
-                          value={doc.description || ''}
-                          onChange={(e) => updateCompanyDocument(index, 'description', e.target.value)}
-                          placeholder="Description optionnelle"
-                          className="form-input text-sm w-full"
-                        />
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <label className="flex items-center gap-2 text-sm">
-                        <input
-                          type="checkbox"
-                          checked={doc.required}
-                          onChange={(e) => updateCompanyDocument(index, 'required', e.target.checked)}
-                          className="w-4 h-4 rounded border-border text-primary-600"
-                        />
-                        Requis
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => removeCompanyDocument(index)}
-                        className="p-1.5 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
                     </div>
                   </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
+                ))}
+              </div>
+            )}
+          </div>
 
-        {/* Employee Documents */}
-        <div>
+          {/* Employee Documents */}
+          <div>
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-lg font-semibold text-foreground flex items-center gap-2">
               <FileText className="w-5 h-5 text-blue-500" />
@@ -658,6 +836,7 @@ export default function CreateCallPage() {
               ))}
             </div>
           )}
+          </div>
         </div>
       </div>
 
@@ -679,7 +858,10 @@ export default function CreateCallPage() {
         </button>
         <button
           type="button"
-          onClick={() => setConfirmDialog({ isOpen: true, type: 'draft' })}
+          onClick={() => {
+            setDialogError(null);
+            setConfirmDialog({ isOpen: true, type: 'draft' });
+          }}
           disabled={isSubmitting}
           className="px-6 py-3 rounded-xl font-medium text-foreground border border-border bg-card hover:bg-muted transition-colors inline-flex items-center justify-center gap-2 disabled:opacity-50"
         >
@@ -688,7 +870,10 @@ export default function CreateCallPage() {
         </button>
         <button
           type="button"
-          onClick={() => setConfirmDialog({ isOpen: true, type: 'publish' })}
+          onClick={() => {
+            setDialogError(null);
+            setConfirmDialog({ isOpen: true, type: 'publish' });
+          }}
           disabled={isSubmitting}
           className="btn-primary inline-flex items-center justify-center gap-2 disabled:opacity-50"
         >
@@ -794,8 +979,12 @@ export default function CreateCallPage() {
           }
           variant="primary"
           confirmLabel={confirmDialog.type === 'publish' ? 'Publier' : 'Enregistrer'}
+          errorMessage={confirmDialog.type === 'publish' ? dialogError || undefined : undefined}
           onConfirm={() => handleSubmit(confirmDialog.type === 'publish')}
-          onCancel={() => setConfirmDialog(null)}
+          onCancel={() => {
+            setDialogError(null);
+            setConfirmDialog(null);
+          }}
           isLoading={isSubmitting}
         />
       )}

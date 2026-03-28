@@ -161,6 +161,7 @@ class SubmissionService:
         editable_statuses = [
             EmployeeSubmissionStatus.PENDING,
             EmployeeSubmissionStatus.SUBMITTED,  # Allow resubmission
+            EmployeeSubmissionStatus.UNDER_REVIEW,  # Allow correction after revision request
         ]
         
         if submission.status not in editable_statuses:
@@ -177,6 +178,16 @@ class SubmissionService:
         )
         existing_result = await session.execute(existing_query)
         existing_doc = existing_result.scalar_one_or_none()
+
+        if submission.status == EmployeeSubmissionStatus.UNDER_REVIEW:
+            if not existing_doc:
+                raise InvalidSubmissionStatus(
+                    "Cannot add new documents while submission is under review"
+                )
+            if existing_doc.review_status != DocumentReviewStatus.REVISION_REQUIRED:
+                raise InvalidSubmissionStatus(
+                    "This document has already been corrected once"
+                )
         
         if existing_doc:
             # Delete old file
@@ -360,6 +371,11 @@ class SubmissionService:
         
         if not document:
             raise DocumentNotFound()
+
+        if document.review_status != DocumentReviewStatus.PENDING:
+            raise InvalidSubmissionStatus(
+                "This document has already been reviewed"
+            )
         
         now = datetime.now(timezone.utc)
         
@@ -396,6 +412,8 @@ class SubmissionService:
             .selectinload(CompanyApplication.call),
             selectinload(EmployeeSubmission.company_application)
             .selectinload(CompanyApplication.company),
+            selectinload(EmployeeSubmission.employee)
+            .selectinload(EmployeeProfile.user),
             selectinload(EmployeeSubmission.documents),
         ).order_by(EmployeeSubmission.created_at.desc())
         
@@ -454,6 +472,7 @@ class SubmissionService:
                 'call_reference': app.call.reference_number,
                 'department': app.call.department.value if hasattr(app.call.department, 'value') else app.call.department,
                 'company_name': app.company.name,
+                'application_deadline': app.call.application_deadline,
                 'required_documents': app.call.employee_required_documents,
                 'has_submission': existing_submission is not None,
                 'submission_id': existing_submission.id if existing_submission else None,
