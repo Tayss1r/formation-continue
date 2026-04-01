@@ -938,13 +938,12 @@ async def publish_results_as_news(
         api_base = domain.rstrip("/")
     else:
         api_base = f"http://{domain.rstrip('/')}"
-    excel_link = f"{api_base}/api/v1/invitations/public/call/{call.id}/results-file?format=excel"
     pdf_link = f"{api_base}/api/v1/invitations/public/call/{call.id}/results-file?format=pdf"
 
     # Build news content - simple paragraph with download links only
     content = f"""<p>Les résultats de l'appel à candidatures <strong>« {call.title} »</strong> (Réf: {call.reference_number}) ont été publiés.</p>
 <p>Les candidats retenus ont été notifiés par email. Vous pouvez consulter la liste complète des résultats en téléchargeant le fichier ci-dessous.</p>
-<p><strong>Télécharger le fichier des résultats :</strong> <a href='{excel_link}' target='_blank' rel='noopener noreferrer'>Excel</a> | <a href='{pdf_link}' target='_blank' rel='noopener noreferrer'>PDF</a></p>"""
+<p><strong>Télécharger le fichier des résultats :</strong> <a href='{pdf_link}' target='_blank' rel='noopener noreferrer'>PDF</a></p>"""
 
     # Create news
     news = News(

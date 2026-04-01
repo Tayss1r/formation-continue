@@ -1,215 +1,307 @@
 # Formation Continue Platform
 
-A full-stack training management platform for continuous professional education.
+Web-based training and cohort management platform for continuous professional education, built for institutions that manage calls for applications, candidate selection, training delivery, and post-selection cohort execution.
 
-This repository contains:
-- `backend/`: FastAPI + SQLAlchemy async API, role-based workflows, and business logic.
-- `frontend/`: Next.js App Router web app for public pages and role-specific dashboards.
-- `complementary.md`: feature specification for the post-results cohort training phase.
+## Table of Contents
 
-This README reflects the codebase as currently implemented, including what has been completed from `complementary.md` and what remains.
+- [Project Title and Description](#project-title-and-description)
+- [Problem and Solution](#problem-and-solution)
+- [Target Users and Purpose](#target-users-and-purpose)
+- [Feature Set](#feature-set)
+- [System Architecture](#system-architecture)
+- [Technology Stack](#technology-stack)
+- [Database Design](#database-design)
+- [Repository Structure](#repository-structure)
+- [Installation and Setup](#installation-and-setup)
+- [Usage Guide](#usage-guide)
+- [API Documentation](#api-documentation)
+- [Deployment (AWS EC2 Demo)](#deployment-aws-ec2-demo)
+- [Screenshots and UI Overview](#screenshots-and-ui-overview)
+- [Challenges and Solutions](#challenges-and-solutions)
+- [Future Improvements](#future-improvements)
+- [Contributing](#contributing)
+- [License](#license)
 
-## 1. Project Overview
+## Project Title and Description
 
-The platform supports a call-for-applicants lifecycle:
-1. Coordinators publish calls.
-2. Companies apply.
-3. Employees submit documents.
-4. Coordinators review and publish results.
-5. Training execution is organized through cohorts.
+`Formation Continue` is a full-stack, role-based training management platform designed to run the complete lifecycle of professional training programs:
 
-Implemented roles include:
-- `admin`
-- `coordinator`
-- `staff`
-- `professor`
-- `company`
-- `employee`
+1. Publish calls for applications.
+2. Receive and review company and employee submissions.
+3. Publish results and organize accepted participants into cohorts.
+4. Deliver training through professor-led sessions and course materials.
+5. Provide dashboards and operational visibility for each role.
 
-## 2. Tech Stack
+It includes two major applications:
 
-### Backend
-- Python, FastAPI, Uvicorn
-- SQLAlchemy 2 (async), Alembic
-- PostgreSQL (asyncpg/psycopg2-binary)
-- Redis
-- Celery
-- fastapi-mail / aiosmtplib
+- `backend/`: FastAPI + SQLAlchemy async API implementing business rules, role-aware authorization, and data workflows.
+- `frontend/`: Next.js App Router client implementing public pages and role-specific dashboards for coordinator, professor, employee, and admin/staff support flows.
+
+## Problem and Solution
+
+### Problem
+
+Training programs are often managed with fragmented tools (email, spreadsheets, messaging), creating operational issues:
+
+- No single source of truth for calls, applications, and cohort planning.
+- Slow coordinator workflow for validation, assignment, and scheduling.
+- Low visibility for employees on their schedules and training documents.
+- Difficult governance around permissions, status transitions, and auditing.
+
+### Solution
+
+This platform centralizes the entire process in one system:
+
+- Structured call-for-application workflow from publishing to final decisions.
+- Cohort-centered execution after results publication.
+- Role-specific interfaces and APIs for coordinators, professors, and employees.
+- Date/hour-constrained session management to maintain planning integrity.
+- Secure material upload/download with controlled access.
+- Dashboard-oriented workflows to monitor operations.
+
+## Target Users and Purpose
+
+### Who this platform is for
+
+- `Coordinators`: define calls, manage applications, create cohorts, assign professors, supervise training flow.
+- `Professors`: manage assigned cohort sessions, publish training materials, and follow delivery plans.
+- `Employees`: follow accepted training schedules, access learning materials, and track training progress.
+- `Admin/Staff`: support account governance, operational oversight, and administrative control.
+
+### Why it exists
+
+The platform exists to reduce manual process overhead, enforce business rules, and provide a reliable training execution backbone for continuous education programs.
+
+## Feature Set
+
+> Implementation status is shown where relevant to match the current runtime code.
+
+### Coordinator Features
+
+- Call management:
+  - Create and publish calls.
+  - Manage lifecycle and visibility of calls.
+- Application review flow:
+  - View applications and related submissions.
+  - Drive acceptance and rejection pipelines.
+- Cohort creation and management:
+  - Create cohorts linked to call and course context.
+  - Define training margins:
+    - Start and end dates.
+    - Daily training time windows (start hour/end hour).
+- Professor assignment:
+  - View available professors per cohort context.
+  - Assign one or more professors through assignment table persistence.
+- Monitoring and analytics:
+  - Dashboard-level visibility exists.
+  - Dedicated advanced cohort monitoring (sessions + attendance KPIs + participant analytics) is partially implemented and planned for expansion.
+
+### Professor Features
+
+- Assigned cohort management:
+  - List assigned cohorts.
+  - Access cohort-level session plans.
+- Session scheduling:
+  - Create, update, and delete cohort sessions.
+  - Validation rejects sessions outside cohort margins.
+- Material management:
+  - Upload training materials.
+  - Attach content to course/cohort learning context.
+- Attendance tracking:
+  - Functional target in product scope.
+  - End-to-end active attendance module is currently pending completion in runtime flow.
+
+### Employee Features
+
+- Training calendar:
+  - Dynamic calendar view of sessions from assigned cohorts.
+  - Real-time reflection of professor scheduling changes.
+- Material access:
+  - View and download course materials relevant to training path.
+- Attendance visibility:
+  - Planned feature for attendance history and status feedback.
+- Dashboard analytics:
+  - Role-specific dashboard and training-oriented overview capabilities.
+
+### Cross-Cutting Features
+
+- Authentication and verification flows.
+- Role-based route and API access control.
+- File upload and secure material download endpoints.
+- Async backend architecture with migration-managed schema evolution.
+
+## System Architecture
+
+### High-Level Architecture
+
+```text
+Client (Next.js App Router)
+    |
+    | HTTPS / JSON (JWT-based auth)
+    v
+API Layer (FastAPI)
+    |
+    | Async ORM operations
+    v
+PostgreSQL (primary relational store)
+
+Supporting services:
+- Redis (cache / task broker)
+- Celery worker (background jobs)
+- Mail service (verification and notifications)
+- Local upload storage served by backend (`/uploads`)
+```
+
+### Request Flow (Typical)
+
+1. User authenticates from frontend.
+2. Frontend stores token (or session context) and calls protected APIs.
+3. FastAPI dependency layer resolves authenticated user and role.
+4. Service layer validates business rules.
+5. SQLAlchemy async repositories persist/retrieve data from PostgreSQL.
+6. API returns DTO/schema payload to frontend.
+7. Frontend updates role dashboard and feature views.
+
+### Cohort Session Scheduling Flow
+
+1. Coordinator creates cohort with date/hour boundaries.
+2. Coordinator assigns professor(s) to cohort.
+3. Professor creates session.
+4. Backend validates:
+   - Professor belongs to assigned cohort.
+   - Session date is inside cohort date range.
+   - Session time is inside allowed daily margin.
+5. If valid, session is stored and becomes visible in employee training calendar.
+
+### Material Download Flow
+
+1. Professor uploads material.
+2. Metadata is stored in database, file is stored in server upload directory.
+3. Employee requests material list from training endpoint.
+4. Employee calls protected download route with material ID.
+5. Backend verifies access and serves file stream.
+
+## Technology Stack
 
 ### Frontend
-- Next.js 16 (App Router)
-- React 19
-- TypeScript
-- Tailwind CSS 4
-- Framer Motion
-- Lucide React icons
 
-## 3. Repository Structure
+- `Next.js 16 (App Router)`:
+  - Chosen for route-based architecture, good DX, and scalable UI composition.
+- `React 19`:
+  - Component-driven UI for role-specific screens and reusable modules.
+- `TypeScript`:
+  - Static typing for API contracts, domain models, and maintainability.
+- `Tailwind CSS 4`:
+  - Utility-first styling for rapid dashboard UI iteration.
+- `Framer Motion`:
+  - Controlled UI transitions and micro-interactions.
+- `Lucide React`:
+  - Consistent iconography in dashboards and form actions.
+
+### Backend
+
+- `Python + FastAPI`:
+  - High-performance async APIs with clear dependency injection patterns.
+- `Uvicorn`:
+  - ASGI server for development and production serving.
+- `SQLAlchemy 2 (async)`:
+  - Strong ORM + async support for complex relational workflows.
+- `Alembic`:
+  - Versioned schema migration control.
+- `Redis`:
+  - Broker/cache support for asynchronous and stateful operations.
+- `Celery`:
+  - Background task execution (notifications, deferred processing).
+- `fastapi-mail / aiosmtplib`:
+  - Email verification and transactional communication.
+
+### Database
+
+- `PostgreSQL`:
+  - Chosen for relational integrity, indexing, transactional guarantees, and fit for normalized business entities (users, calls, cohorts, sessions, materials).
+
+### Deployment
+
+- `AWS EC2 (demo setup)`:
+  - Cost-effective and flexible environment for full-stack deployment demonstrations.
+
+## Database Design
+
+This project follows a relational model centered on users, calls, applications, cohorts, and training execution artifacts.
+
+### Core Entities
+
+- `User`:
+  - Authentication identity and role (`admin`, `coordinator`, `staff`, `professor`, `company`, `employee`).
+- `Call`:
+  - Training call metadata, timelines, and publication state.
+- `Application`:
+  - Company/employee submission and evaluation state linked to call.
+- `Course`:
+  - Course definition used in training and cohort planning.
+- `Cohort`:
+  - Post-results grouping for accepted participants and execution boundaries.
+- `CohortProfessorAssignment`:
+  - Join entity for many-to-many relation between cohorts and professors.
+- `CohortSession`:
+  - Scheduled instructional units linked to cohort and professor.
+- `Attendance`:
+  - Target entity for present/absent/late tracking (roadmap and partial artifacts; active runtime rollout in progress).
+- `Material`:
+  - Uploaded training files and metadata; linked to course/professor/cohort context based on feature path.
+
+### Relationship Overview
+
+- One `Call` can have many `Applications`.
+- One `Course` can be referenced by many `Cohorts`.
+- One `Cohort` can have many `CohortSessions`.
+- One `Cohort` can have many assigned `Professors` through `CohortProfessorAssignment`.
+- One `Professor` can upload many `Materials`.
+- One `Employee` can consume sessions/materials from assigned cohort path.
+- `Attendance` is designed to connect `Employee` to `CohortSession` with status + audit metadata.
+
+## Repository Structure
 
 ```text
 formation-continue/
   backend/
     app/
-      api/
-      db/
-      services/
-      schemas/
-      core/
-      main.py
-    migrations/
+      api/            # Route modules grouped by role/domain
+      core/           # Config, security, startup settings
+      db/             # ORM models, session management
+      schemas/        # Pydantic request/response schemas
+      services/       # Business logic and validation rules
+      main.py         # FastAPI app entry point
+    migrations/       # Alembic migration chain
     requirements.txt
   frontend/
-    app/
-    components/
-    contexts/
-    hooks/
-    lib/
-    types/
+    app/              # App Router pages and route groups
+    components/       # Shared and role-specific React components
+    contexts/         # Global state/context providers
+    hooks/            # Reusable frontend hooks
+    lib/              # API clients and domain helpers
+    types/            # Shared TypeScript domain types
     package.json
-  complementary.md
 ```
 
-## 4. Cohort Training Phase (from complementary.md)
+## Installation and Setup
 
-`complementary.md` requested a full "post-results training execution" flow centered on cohorts and explicitly asked to avoid manual migration generation.
+### Prerequisites
 
-### 4.1 Coverage Matrix
+- `Python 3.11+` (recommended)
+- `Node.js 20+` and `npm`
+- `PostgreSQL 14+`
+- `Redis 6+`
+- Git
 
-- `[x]` Step 1: Create Cohort
-  - Coordinator UI page exists: `/coordinator/cohorts`.
-  - Backend APIs exist for listing/form-options/creation.
-  - Training margin fields are enforced (start/end date + daily start/end hours).
+### 1. Clone Repository
 
-- `[x]` Step 2: Assign Professors
-  - Coordinator can fetch available professors and assign one or more to a cohort.
-  - Assignment is persisted through `cohort_professor_assignments`.
+```bash
+git clone <your-repository-url>
+cd formation-continue
+```
 
-- `[x]` Step 3: Professor Session Scheduling
-  - Professors can list assigned cohorts and create/update/delete sessions.
-  - Validation is implemented in backend service to reject sessions outside cohort date/hour margins.
-
-- `[x]` Step 4: Employee Dynamic Training Calendar
-  - Employee page `/employee/training` displays session calendar from cohort sessions.
-  - Data is loaded dynamically from API and updates when sessions are changed.
-
-- `[x]` Step 5: Course Materials Access in Training View
-  - Professors can upload course materials.
-  - Employees can view/download materials on `/employee/training`.
-  - Current implementation links materials by course and exposes them in cohort training context.
-
-- `[ ]` Step 6: Attendance
-  - No active attendance model/API/UI in current runtime code.
-  - Attendance appears only in legacy/old model artifacts, not in the active cohort workflow.
-
-- `[~]` Step 7: Coordinator Monitoring (partial)
-  - Coordinator can view cohorts and assigned professors.
-  - Full monitoring panel for session list, attendance stats, and enrolled employees per cohort is not fully implemented as a dedicated feature set.
-
-### 4.2 What Was Explicitly Considered from complementary.md
-
-- Cohort as central post-results entity: implemented.
-- Margin-constrained session scheduling: implemented (frontend validation + backend authoritative validation).
-- End-to-end website visibility (not backend-only): implemented for cohort creation, assignment, professor scheduling, employee training calendar/materials.
-- Attendance and full coordinator monitoring: not completed yet.
-
-## 5. Backend Details
-
-### 5.1 Main API Router Prefix
-- Base prefix: `/api/v1`
-
-### 5.2 Important API Groups
-- `/auth`: authentication, verification, token refresh/logout.
-- `/calls`, `/applications`, `/submissions`: call and review workflow.
-- `/coordinator`: coordinator dashboards and cohort management.
-- `/professor`: professor dashboard, courses, materials, cohort sessions.
-- `/employee/training`: employee training calendar and materials.
-- `/materials`: material listing/download access.
-
-### 5.3 Cohort-Related Endpoints
-
-Coordinator:
-- `GET /api/v1/coordinator/cohorts`
-- `GET /api/v1/coordinator/cohorts/form-options`
-- `POST /api/v1/coordinator/cohorts`
-- `GET /api/v1/coordinator/cohorts/{cohort_id}/available-professors`
-- `PUT /api/v1/coordinator/cohorts/{cohort_id}/professors`
-
-Professor:
-- `GET /api/v1/professor/my-cohorts`
-- `GET /api/v1/professor/my-cohorts/{cohort_id}/sessions`
-- `POST /api/v1/professor/my-cohorts/{cohort_id}/sessions`
-- `PUT /api/v1/professor/my-cohorts/{cohort_id}/sessions/{session_id}`
-- `DELETE /api/v1/professor/my-cohorts/{cohort_id}/sessions/{session_id}`
-
-Employee:
-- `GET /api/v1/employee/training/calendar`
-- `GET /api/v1/employee/training/materials`
-
-Materials:
-- `GET /api/v1/materials/download/{material_id}`
-
-### 5.4 Active Cohort Data Model
-
-Core entities in active model:
-- `Cohort`
-- `CohortProfessorAssignment`
-- `CohortSession`
-
-Relations:
-- Cohort -> call, course, professors, sessions.
-- Professor assignment is many-to-many via assignment table.
-- Sessions belong to a cohort and a professor.
-
-## 6. Frontend Details
-
-### 6.1 Main User-Facing Areas
-- Public pages: landing, calls, news, auth.
-- Coordinator dashboard and workflows.
-- Professor dashboard and workflows.
-- Employee dashboard and workflows.
-
-### 6.2 Cohort/Training UI Pages
-
-Coordinator:
-- `/coordinator/cohorts`: create cohorts, select calls/courses, define margins, assign professors.
-
-Professor:
-- `/professor`: includes assigned cohorts and session management blocks.
-- `/professor/sessions`: focused cohort session management view.
-
-Employee:
-- `/employee/training`: grouped calendar view + cohort materials + download.
-
-## 7. Environment Variables
-
-### 7.1 Backend (`backend/.env`)
-Required by `backend/app/core/config.py`:
-- `database_url`
-- `JWT_SECRET`
-- `JWT_ALGORITHM`
-- `ACCESS_TOKEN_EXPIRY`
-- `REFRESH_TOKEN_EXPIRY_DAYS`
-- `REDIS_URL`
-- `MAIL_USERNAME`
-- `MAIL_PASSWORD`
-- `MAIL_FROM`
-- `MAIL_PORT`
-- `MAIL_SERVER`
-- `MAIL_FROM_NAME`
-- Optional:
-  - `MAIL_STARTTLS`
-  - `MAIL_SSL_TLS`
-  - `DOMAIN`
-  - `FRONTEND_URL`
-  - upload and file-size related overrides
-
-### 7.2 Frontend (`frontend/.env.local`)
-- `NEXT_PUBLIC_API_URL` (default: `http://localhost:8000/api/v1`)
-- `NEXT_PUBLIC_UPLOADS_URL` (default: `http://localhost:8000`)
-
-## 8. Local Development Setup
-
-## 8.1 Backend Setup
+### 2. Backend Setup
 
 ```bash
 cd backend
@@ -218,69 +310,284 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-Run migrations (autogenerated migration chain):
+Create `backend/.env`:
+
+```env
+database_url=postgresql+asyncpg://<user>:<password>@localhost:5432/<db_name>
+JWT_SECRET=<your-secret>
+JWT_ALGORITHM=HS256
+ACCESS_TOKEN_EXPIRY=60
+REFRESH_TOKEN_EXPIRY_DAYS=7
+REDIS_URL=redis://localhost:6379/0
+MAIL_USERNAME=<mail-user>
+MAIL_PASSWORD=<mail-password>
+MAIL_FROM=<mail-from>
+MAIL_PORT=587
+MAIL_SERVER=<smtp-host>
+MAIL_FROM_NAME=Formation Continue
+MAIL_STARTTLS=true
+MAIL_SSL_TLS=false
+DOMAIN=http://localhost:8000
+FRONTEND_URL=http://localhost:3000
+```
+
+Run database migrations:
 
 ```bash
 alembic upgrade head
 ```
 
-Run API server:
+Start API server:
 
 ```bash
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-Optional Celery worker:
+Optional background worker:
 
 ```bash
 celery -A app.celery_tasks.celery_app worker --loglevel=info
 ```
 
-## 8.2 Frontend Setup
+### 3. Frontend Setup
 
 ```bash
-cd frontend
+cd ../frontend
 npm install
+```
+
+Create `frontend/.env.local`:
+
+```env
+NEXT_PUBLIC_API_URL=http://localhost:8000/api/v1
+NEXT_PUBLIC_UPLOADS_URL=http://localhost:8000
+```
+
+Start frontend dev server:
+
+```bash
 npm run dev
 ```
 
-Frontend default URL:
-- `http://localhost:3000`
+### 4. Validate Local Environment
 
-## 8.3 End-to-End Local Run
+1. Confirm backend is reachable at `http://localhost:8000/docs`.
+2. Confirm frontend is reachable at `http://localhost:3000`.
+3. Log in with test accounts for coordinator/professor/employee.
+4. Create a cohort and verify session visibility in employee training page.
 
-1. Start PostgreSQL and Redis.
-2. Start backend at `:8000`.
-3. Start frontend at `:3000`.
-4. Verify frontend env points to backend API.
+## Usage Guide
 
-## 9. Migrations Policy
+### Scenario A: Coordinator Runs a New Training Cycle
 
-`complementary.md` explicitly requested no manual migration generation during the cohort feature implementation.
+1. Coordinator creates/publishes a new call.
+2. Applications and submissions are reviewed.
+3. Accepted track is finalized.
+4. Coordinator creates cohort with date/time margins.
+5. Coordinator assigns professors to the cohort.
+6. Coordinator monitors execution and adjusts planning if needed.
 
-Current state:
-- Cohort runtime code is present in models/services/apis/ui.
-- Existing migration history remains in `backend/migrations/versions/`.
-- If schema drift exists in your environment, generate migrations from your local final model state only when you are ready.
+### Scenario B: Professor Delivers Training
 
-## 10. Known Gaps and Next Priorities
+1. Professor opens assigned cohorts.
+2. Professor creates session schedule within cohort boundaries.
+3. Professor updates or deletes sessions when changes are required.
+4. Professor uploads course materials for participants.
+5. Participants consume updates in their training view.
 
-### 10.1 Not Yet Implemented
-- Attendance workflow (present/absent/late recording + employee attendance history).
-- Dedicated coordinator cohort monitoring panel with full training execution analytics (sessions + attendance stats + enrolled employees in one place).
+### Scenario C: Employee Follows Training Plan
 
-### 10.2 Recommended Next Steps
-1. Add active attendance model(s), schemas, service, and APIs in current model set.
-2. Add professor attendance UI on top of cohort sessions.
-3. Add employee attendance history page in `My Training`.
-4. Add coordinator monitoring widgets for cohort execution metrics.
+1. Employee opens `My Training`.
+2. Calendar displays upcoming sessions for cohort context.
+3. Employee downloads and studies shared materials.
+4. Employee tracks progress and attendance visibility (when attendance module is enabled end-to-end).
 
-## 11. Notes
+## API Documentation
 
-- The project includes some legacy files (`models_old.py` etc.) not driving the active runtime workflow.
-- Material download authorization is role-aware and enforced in backend.
-- Upload directories are initialized at app startup and served via `/uploads`.
+Base path: `/api/v1`
 
----
+Interactive docs:
 
-If you want, the next documentation step can be a separate `docs/cohort-workflow.md` with sequence diagrams and test scenarios for each complementary requirement.
+- Swagger UI: `http://localhost:8000/docs`
+- ReDoc: `http://localhost:8000/redoc`
+
+### Authentication
+
+| Method | Route | Description |
+|---|---|---|
+| `POST` | `/auth/login` | Authenticate user and issue tokens. |
+| `POST` | `/auth/refresh` | Refresh access token. |
+| `POST` | `/auth/logout` | Invalidate session/token context. |
+| `POST` | `/auth/verify-email` | Email verification flow. |
+
+### Calls / Applications / Submissions
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/calls` | List available calls. |
+| `POST` | `/calls` | Create new call (privileged role). |
+| `GET` | `/applications` | List applications with filters. |
+| `POST` | `/applications` | Submit application. |
+| `GET` | `/submissions` | List document submissions. |
+
+### Coordinator - Cohorts
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/coordinator/cohorts` | List cohorts for coordinator view. |
+| `GET` | `/coordinator/cohorts/form-options` | Get data required for cohort creation forms. |
+| `POST` | `/coordinator/cohorts` | Create cohort with schedule margins. |
+| `GET` | `/coordinator/cohorts/{cohort_id}/available-professors` | List assignable professors for a cohort. |
+| `PUT` | `/coordinator/cohorts/{cohort_id}/professors` | Assign professors to cohort. |
+
+### Professor - Cohorts and Sessions
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/professor/my-cohorts` | List cohorts assigned to authenticated professor. |
+| `GET` | `/professor/my-cohorts/{cohort_id}/sessions` | List sessions for one assigned cohort. |
+| `POST` | `/professor/my-cohorts/{cohort_id}/sessions` | Create session with boundary validation. |
+| `PUT` | `/professor/my-cohorts/{cohort_id}/sessions/{session_id}` | Update session details. |
+| `DELETE` | `/professor/my-cohorts/{cohort_id}/sessions/{session_id}` | Remove a session. |
+
+### Employee - Training
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/employee/training/calendar` | Return employee training calendar events. |
+| `GET` | `/employee/training/materials` | Return accessible training materials. |
+
+### Materials
+
+| Method | Route | Description |
+|---|---|---|
+| `GET` | `/materials/download/{material_id}` | Download material if role authorization passes. |
+
+## Deployment (AWS EC2 Demo)
+
+This project is currently deployed as a demo architecture on AWS EC2.
+
+### Deployment Topology (Demo)
+
+- `EC2 instance` hosts backend and frontend processes.
+- `Nginx` acts as reverse proxy and static edge for domain routing.
+- `Uvicorn` serves FastAPI app.
+- `Next.js` runs in production mode (`next start`).
+- `PostgreSQL` and `Redis` run either on EC2 or adjacent managed/self-hosted nodes depending on environment.
+- `systemd` services keep backend/worker/frontend processes alive.
+
+### Typical Deployment Steps
+
+1. Provision EC2 instance and open required ports (`22`, `80`, `443`).
+2. Install runtime dependencies (`python`, `node`, `nginx`, `postgresql`/remote DB client, `redis` if local).
+3. Pull source code and create backend/frontend env files.
+4. Install backend dependencies and run `alembic upgrade head`.
+5. Build frontend with `npm run build`.
+6. Configure `systemd` services for:
+   - FastAPI app.
+   - Celery worker.
+   - Next.js production server.
+7. Configure Nginx reverse proxy:
+   - `/api/*` -> FastAPI service.
+   - `/` -> Next.js service.
+8. Attach domain and TLS certificate (for example using Let's Encrypt).
+9. Verify uploads path permissions and availability.
+
+### Upload Storage Note
+
+Current upload implementation stores files on local server disk and serves them through backend routes.
+
+- Advantage:
+  - Simple for local development and demo deployments.
+- Limitation:
+  - Not ideal for horizontal scaling or ephemeral instance replacement.
+- Recommended production upgrade:
+  - Move to object storage (for example Amazon S3) with signed URL strategy and lifecycle policies.
+
+## Screenshots and UI Overview
+
+Add real screenshots before final publication.
+
+- Public Landing Page: `docs/screenshots/landing.png`
+- Coordinator Dashboard: `docs/screenshots/coordinator-dashboard.png`
+- Cohort Creation Page: `docs/screenshots/coordinator-cohorts.png`
+- Professor Session Management: `docs/screenshots/professor-sessions.png`
+- Employee Training Calendar: `docs/screenshots/employee-training.png`
+- Material Download View: `docs/screenshots/employee-materials.png`
+
+Example markdown for embedding:
+
+```markdown
+![Coordinator Cohorts](docs/screenshots/coordinator-cohorts.png)
+```
+
+## Challenges and Solutions
+
+### 1. Enforcing Session Boundaries Reliably
+
+- Challenge:
+  - Prevent professors from scheduling outside allowed cohort dates and daily time windows.
+- Solution:
+  - Added strict backend validation in service layer.
+  - Kept frontend checks for immediate UX feedback but treated backend as source of truth.
+
+### 2. Role-Consistent Professor Assignment
+
+- Challenge:
+  - Inconsistent role/profile data can cause assignment and listing anomalies.
+- Solution:
+  - Filter assignment candidates using professor profile + account status + contextual constraints.
+  - Keep role checks at API access and service query level.
+
+### 3. Keeping Employee Calendar in Sync
+
+- Challenge:
+  - Session updates by professors must quickly appear for employees.
+- Solution:
+  - Training calendar endpoint reads directly from active session state and grouped cohort context.
+  - Frontend fetch paths are aligned with role-specific pages.
+
+### 4. Material Access Control
+
+- Challenge:
+  - Uploaded files must be downloadable only by authorized roles.
+- Solution:
+  - Added role-aware authorization checks in download API before file response.
+
+## Future Improvements
+4. Improve scalability:
+   - Containerized deployment, autoscaling strategy, and managed database/cache services.
+5. Strengthen security posture:
+   - Secret rotation, stricter CORS/CSRF strategy, audit logs, and rate limiting.
+6. Improve observability:
+   - Structured logs, traces, metrics dashboards, and alerting.
+7. Expand automated testing:
+   - More integration tests for role workflows and cohort lifecycle guarantees.
+
+## Contributing
+
+Contributions are welcome for bug fixes, refactors, tests, and feature extensions.
+
+1. Fork the repository.
+2. Create a feature branch: `git checkout -b feature/<short-name>`.
+3. Commit changes with clear messages.
+4. Ensure local tests/linting pass.
+5. Open a pull request with:
+   - Problem statement.
+   - Technical approach.
+   - Test evidence.
+   - Screenshots for UI changes.
+
+Recommended PR checklist:
+
+- No secrets committed.
+- Migrations reviewed.
+- API schema updates reflected in frontend types.
+- Backward compatibility considered.
+
+## License
+
+This repository currently has no explicit open-source license file.
+
+- Unless a `LICENSE` file is added, treat the code as `All Rights Reserved`.
+- If you intend public/open reuse, add a license (for example MIT, Apache-2.0, or GPL) in the repository root.

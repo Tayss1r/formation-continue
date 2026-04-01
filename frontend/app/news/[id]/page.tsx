@@ -51,6 +51,13 @@ export default function NewsDetailPage() {
     return `${minutes} min de lecture`;
   };
 
+  const getSanitizedNewsContent = (content: string) => {
+    return content
+      .replace(/<a[^>]*>\s*Excel\s*<\/a>\s*\|\s*/gi, "")
+      .replace(/Excel\s*\|\s*/gi, "")
+      .replace(/\n/g, '<br />');
+  };
+
   if (loading) {
     return (
       <main className="min-h-screen bg-gradient-to-b from-primary-50 to-white dark:from-primary-950/20 dark:to-background">
@@ -211,7 +218,7 @@ export default function NewsDetailPage() {
             <div 
               className="text-slate-700 dark:text-slate-300 leading-relaxed space-y-6"
               dangerouslySetInnerHTML={{ 
-                __html: news.content?.replace(/\n/g, '<br />') || '' 
+                __html: getSanitizedNewsContent(news.content || '')
               }}
             />
           </motion.article>
@@ -258,7 +265,7 @@ export default function NewsDetailPage() {
       <footer className="py-8 border-t border-slate-200 dark:border-slate-800">
         <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 text-center">
           <p className="text-sm text-slate-500 dark:text-slate-400">
-            © {new Date().getFullYear()} FormationPro - Bureau de Formation Continue
+            © {new Date().getFullYear()} Forminy - Bureau de Formation Continue
           </p>
         </div>
       </footer>
