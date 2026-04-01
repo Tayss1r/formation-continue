@@ -44,6 +44,11 @@ def _generate_secure_token() -> str:
     return secrets.token_urlsafe(48)
 
 
+def _frontend_link(path: str) -> str:
+    """Build a frontend URL from FRONTEND_URL without double slashes."""
+    return f"{settings.FRONTEND_URL.rstrip('/')}{path}"
+
+
 class InvitationService:
     """Service for managing invitation workflow."""
 
@@ -230,7 +235,7 @@ class InvitationService:
         invitation_token: str,
     ):
         """Send approval email to company with invitation link."""
-        invite_url = f"{settings.FRONTEND_URL}/dashboard/invite?token={invitation_token}"
+        invite_url = _frontend_link(f"/company/invite?token={invitation_token}")
 
         html = f"""
         <!DOCTYPE html>
@@ -289,7 +294,7 @@ class InvitationService:
         invitation_token: str,
     ):
         """Send invitation email to an employee."""
-        register_url = f"{settings.FRONTEND_URL}/signup?token={invitation_token}"
+        register_url = _frontend_link(f"/employee/register?token={invitation_token}")
 
         html = f"""
         <!DOCTYPE html>

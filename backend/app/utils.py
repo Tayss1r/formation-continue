@@ -10,6 +10,7 @@ from fastapi.security import OAuth2PasswordBearer
 from .core.config import settings
 from datetime import timedelta, datetime
 from .celery_tasks import send_email
+from .mail import create_message, mail
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl='login')
 
@@ -62,69 +63,79 @@ def send_verification_email(user):
     link = f"http://{settings.DOMAIN}/api/v1/auth/verify/{token}"
     html = f"""
             <!DOCTYPE html>
-                <html lang="en">
-                <head>
+            <html lang="fr">
+            <head>
                 <meta charset="UTF-8">
-                <title>Verify Your Email</title>
-                </head>
-                <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0;">
-                <table align="center" width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; margin-top: 40px; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
+                <title>Forminy | Vérifiez votre adresse e-mail</title>
+            </head>
+            <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f9fafb; margin: 0; padding: 0;">
+                <table align="center" width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; margin-top: 40px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e5e7eb;">
                     <tr>
-                    <td style="padding: 40px; text-align: center;">
-                        <h2 style="color: #333333;">Welcome to Cabinet Medical, {user.fullname}!</h2>
-                        <p style="color: #555555; font-size: 16px; line-height: 1.5;">
-                        Thank you for registering. Please verify your email address to get started.
-                        </p>
-                        <a href="{link}" 
-                        style="display: inline-block; margin-top: 25px; padding: 12px 25px; background-color: #4CAF50; color: #ffffff; text-decoration: none; font-weight: bold; border-radius: 5px; transition: background 0.3s;">
-                        Verify Email
-                        </a>
-                        <p style="margin-top: 30px; color: #888888; font-size: 14px;">
-                        If you didn’t create an account, you can safely ignore this email.
-                        </p>
-                    </td>
+                        <td style="padding: 40px; text-align: center;">
+                            <h2 style="color: #111827; margin-bottom: 10px;">Bienvenue sur Forminy, {user.fullname} !</h2>
+                            <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">
+                                Merci d'avoir rejoint notre communauté de formation professionnelle. Veuillez cliquer sur le bouton ci-dessous pour vérifier votre adresse e-mail et finaliser votre inscription.
+                            </p>
+                            <a href="{link}" 
+                            style="display: inline-block; margin-top: 25px; padding: 14px 32px; background-color: #2563eb; color: #ffffff; text-decoration: none; font-weight: 600; border-radius: 8px; font-size: 16px;">
+                                Confirmer mon e-mail
+                            </a>
+                            <p style="margin-top: 35px; color: #9ca3af; font-size: 13px; line-height: 1.4;">
+                                Ce lien expirera prochainement. Si vous rencontrez des difficultés, n'hésitez pas à contacter notre équipe support.
+                            </p>
+                            <hr style="border: 0; border-top: 1px solid #f3f4f6; margin: 30px 0;">
+                            <p style="color: #9ca3af; font-size: 13px;">
+                                Si vous n’avez pas créé de compte sur <strong>Forminy</strong>, vous pouvez ignorer cet e-mail.
+                            </p>
+                        </td>
                     </tr>
                 </table>
-                </body>
-                </html>
+            </body>
+            </html>
             """
     emails = [email]
     subject = "Verify your Email"
     send_email.delay(emails, subject, html)
 
-def send_verification_code_email(user, code: str):
+async def send_verification_code_email(user, code: str):
     """Send 6-digit verification code via email"""
     email = user.email
     html = f"""
             <!DOCTYPE html>
-            <html lang="en">
+            <html lang="fr">
             <head>
-            <meta charset="UTF-8">
-            <title>Email Verification Code</title>
+                <meta charset="UTF-8">
+                <title>Forminy | Code de vérification</title>
             </head>
-            <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; margin: 0; padding: 0;">
-            <table align="center" width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; margin-top: 40px; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(0,0,0,0.1);">
-                <tr>
-                <td style="padding: 40px; text-align: center;">
-                    <h2 style="color: #333333;">Welcome to Cabinet Medical, {user.fullname}!</h2>
-                    <p style="color: #555555; font-size: 16px; line-height: 1.5;">
-                    Thank you for registering. Use the following code to verify your email address:
-                    </p>
-                    <div style="margin: 30px 0; padding: 20px; background-color: #f8f9fa; border-radius: 8px;">
-                        <span style="font-size: 32px; font-weight: bold; letter-spacing: 8px; color: #4CAF50;">{code}</span>
-                    </div>
-                    <p style="color: #888888; font-size: 14px;">
-                    This code will expire in 10 minutes.
-                    </p>
-                    <p style="margin-top: 30px; color: #888888; font-size: 14px;">
-                    If you didn't create an account, you can safely ignore this email.
-                    </p>
-                </td>
-                </tr>
-            </table>
+            <body style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f9fafb; margin: 0; padding: 0;">
+                <table align="center" width="100%" cellpadding="0" cellspacing="0" style="max-width: 600px; background-color: #ffffff; margin-top: 40px; border-radius: 12px; overflow: hidden; box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #e5e7eb;">
+                    <tr>
+                        <td style="padding: 40px; text-align: center;">
+                            <h2 style="color: #111827; margin-bottom: 10px;">Bienvenue sur Forminy, {user.fullname} !</h2>
+                            <p style="color: #4b5563; font-size: 16px; line-height: 1.6;">
+                                Nous sommes ravis de vous compter parmi nous. Veuillez utiliser le code de vérification ci-dessous pour confirmer votre adresse e-mail et activer votre compte :
+                            </p>
+                            <div style="margin: 35px 0; padding: 24px; background-color: #eff6ff; border-radius: 10px; border: 1px dashed #bfdbfe;">
+                                <span style="font-size: 36px; font-weight: bold; letter-spacing: 10px; color: #2563eb;">{code}</span>
+                            </div>
+                            <p style="color: #9ca3af; font-size: 14px;">
+                                <strong>Note :</strong> Ce code est valide pendant 10 minutes.
+                            </p>
+                            <hr style="border: 0; border-top: 1px solid #f3f4f6; margin: 30px 0;">
+                            <p style="color: #9ca3af; font-size: 13px; line-height: 1.4;">
+                                Si vous n'avez pas créé de compte sur <strong>Forminy</strong>, vous pouvez ignorer cet e-mail en toute sécurité.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
             </body>
             </html>
             """
     emails = [email]
     subject = "Your Email Verification Code"
-    send_email.delay(emails, subject, html)
+    message = create_message(
+        recipients=emails,
+        subject=subject,
+        body=html,
+    )
+    await mail.send_message(message)

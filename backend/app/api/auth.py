@@ -204,7 +204,7 @@ async def signup(signup_data: SignupRequest, session: AsyncSession = Depends(get
     await store_email_verification_code(email, hashed_code)
     
     # Send verification code via email using Celery (existing utility)
-    send_verification_code_email(new_user, code)
+    await send_verification_code_email(new_user, code)
     
     return AuthSignupResponse(
         message="Account created! A 6-digit verification code has been sent to your email.",
@@ -393,7 +393,7 @@ async def send_verification_code(request: ResendEmailVerificationCodeModel, sess
         await store_email_verification_code(request.email, hashed_code)
         
         # Send verification code via email
-        send_verification_code_email(user, code)
+        await send_verification_code_email(user, code)
     
     # Return generic message for security purposes
     return JSONResponse(
