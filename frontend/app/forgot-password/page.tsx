@@ -25,7 +25,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      await apiClient.post("/auth/password-reset/request", { email });
+      await apiClient.post("/auth/reset_password", { email, client: "mobile" });
       setMessage("Un code de vérification a été envoyé à votre adresse email.");
       setStep("code");
     } catch (err: unknown) {
@@ -42,7 +42,7 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      await apiClient.post("/auth/password-reset/verify-code", { email, code });
+      await apiClient.post("/auth/verify_reset_code", { email, code });
       setMessage("");
       setStep("reset");
     } catch (err: unknown) {
@@ -70,11 +70,10 @@ export default function ForgotPasswordPage() {
     setIsLoading(true);
 
     try {
-      await apiClient.post("/auth/password-reset/confirm-code", {
+      await apiClient.post("/auth/reset_password_code", {
         email,
         code,
         new_password: newPassword,
-        confirm_password: confirmPassword,
       });
       setStep("success");
     } catch (err: unknown) {

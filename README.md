@@ -258,6 +258,50 @@ This project follows a relational model centered on users, calls, applications, 
 - One `Cohort` can have many assigned `Professors` through `CohortProfessorAssignment`.
 - One `Professor` can upload many `Materials`.
 - One `Employee` can consume sessions/materials from assigned cohort path.
+
+## Testing (Pytest)
+
+Pytest tests are located in `tests/` at the project root.
+
+Run tests:
+
+```bash
+source backend/venvpire/bin/activate
+pip install -r backend/requirements-dev.txt
+pytest
+```
+
+Current baseline tests include:
+
+- API smoke tests (`/openapi.json`, `/docs`, 404 behavior)
+- Auth password-reset route registration checks
+
+## Docker Setup
+
+Docker configuration has been added for:
+
+- `backend` (FastAPI)
+- `frontend` (Next.js)
+- `db` (PostgreSQL)
+- `redis`
+
+Main files:
+
+- `docker-compose.yml`
+- `backend/Dockerfile`
+- `frontend/Dockerfile`
+
+Start the full stack:
+
+```bash
+docker compose up --build
+```
+
+Services:
+
+- Frontend: `http://localhost:3000`
+- Backend API: `http://localhost:8000`
+- Swagger docs: `http://localhost:8000/docs`
 - `Attendance` is designed to connect `Employee` to `CohortSession` with status + audit metadata.
 
 ## Repository Structure
