@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 
-export default function CompanyInvitePage() {
+function CompanyInviteContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
@@ -16,4 +16,12 @@ export default function CompanyInvitePage() {
   }, [token, router]);
 
   return null;
+}
+
+export default function CompanyInvitePage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <CompanyInviteContent />
+    </Suspense>
+  );
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { Suspense, useState, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import {
   UserPlus,
@@ -20,7 +20,7 @@ interface EmployeeInput {
   email: string;
 }
 
-export default function CompanyInviteDashboardPage() {
+function CompanyInviteDashboardContent() {
   const searchParams = useSearchParams();
   const token = searchParams.get("token") || "";
 
@@ -272,5 +272,13 @@ export default function CompanyInviteDashboardPage() {
         </form>
       </div>
     </div>
+  );
+}
+
+export default function CompanyInviteDashboardPage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <CompanyInviteDashboardContent />
+    </Suspense>
   );
 }

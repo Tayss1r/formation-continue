@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useState } from "react";
+import { Suspense, useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "next/navigation";
 import { Loader2, CalendarDays, AlertCircle } from "lucide-react";
 
@@ -18,7 +18,7 @@ import type {
   SessionAttendanceRecord,
 } from "@/types/cohort";
 
-export default function ProfessorAttendancePage() {
+function ProfessorAttendanceContent() {
   const searchParams = useSearchParams();
   const initialCohortId = useMemo(() => Number(searchParams.get("cohortId") || 0), [searchParams]);
   const initialSessionId = useMemo(() => Number(searchParams.get("sessionId") || 0), [searchParams]);
@@ -349,5 +349,13 @@ export default function ProfessorAttendancePage() {
         </section>
       )}
     </div>
+  );
+}
+
+export default function ProfessorAttendancePage() {
+  return (
+    <Suspense fallback={<div>Loading...</div>}>
+      <ProfessorAttendanceContent />
+    </Suspense>
   );
 }
