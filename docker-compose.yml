@@ -1,0 +1,77 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: formation_db
+    environment:
+      POSTGRES_DB: formation
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d formation"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: formation_redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  backend:
+    build: ./backend
+    container_name: formation_backend
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_ALGORITHM: HS256
+      ACCESS_TOKEN_EXPIRY: 3600
+      REFRESH_TOKEN_EXPIRY_DAYS: 7
+      REDIS_URL: redis://redis:6379/0
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_FROM: ${MAIL_FROM}
+      MAIL_PORT: 587
+      MAIL_SERVER: smtp.gmail.com
+      MAIL_FROM_NAME: "Formation Continue"
+      MAIL_STARTTLS: "true"
+      MAIL_SSL_TLS: "false"
+      DOMAIN: ${DOMAIN}
+      FRONTEND_URL: ${FRONTEND_URL}
+    ports:
+      - "80:8000"
+
+  celery_worker:
+    build: ./backend
+    container_name: formation_celery
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: redis://redis:6379/0
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_FROM: ${MAIL_FROM}
+      DOMAIN: ${DOMAIN}
+      FRONTEND_URL: ${FRONTEND_URL}
+    command: celery -A app.worker worker --loglevel=info 
+
+volumes:
+  postgres_data:
+  redis_data:
