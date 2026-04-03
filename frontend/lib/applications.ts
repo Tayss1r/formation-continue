@@ -19,10 +19,6 @@ import type {
 } from "@/types/application";
 import type { ApplicationStatus } from "@/types/call";
 
-// =============================================================================
-// COMPANY ENDPOINTS
-// =============================================================================
-
 /**
  * Create a new application for a call (Company only)
  */
